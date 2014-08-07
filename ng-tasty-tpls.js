@@ -2,7 +2,7 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.2.1 - 2014-08-04
+ * Version: 0.2.2-rc.1 - 2014-08-07
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.tpls", "ngTasty.table"]);
@@ -27,8 +27,7 @@ angular.module('ngTasty.table', [])
     },
     link: function(scope, element, attrs) {
       'use strict';
-      var resource, setDirectivesValues, setProperty, joinObjects,
-          buildUrl, updateResourceWatch, initParamsWatch;
+      var debounce;
 
       if (!attrs.resource) {
         throw 'AngularJS tastyTable directive: miss the resource attribute';
@@ -55,7 +54,7 @@ angular.module('ngTasty.table', [])
       scope.resourcePagination = {};
       scope.url = '';
 
-      setDirectivesValues = function (resource) {
+      scope.setDirectivesValues = function (resource) {
         if (!resource) {
           return false;
         }
@@ -68,33 +67,35 @@ angular.module('ngTasty.table', [])
         scope.resourcePagination = resource.pagination;
       };
 
-      setProperty = function(objOne, objTwo, attrname) {
+      scope.setProperty = function(objOne, objTwo, attrname) {
         if (objTwo[attrname]) {
           objOne[attrname] = objTwo[attrname];
         }
         return objOne;
       };
 
-      joinObjects = function(objOne, objTwo) {
+      scope.joinObjects = function(objOne, objTwo) {
         for (var attrname in objTwo) {
-          setProperty(objOne, objTwo, attrname);
+          scope.setProperty(objOne, objTwo, attrname);
         }
         return objOne;
       };
 
-      buildUrl = function(params, filters) {
+      scope.buildUrl = function(params, filters) {
         var urlQuery, value, url;
         urlQuery = {};
+        //console.log(params)
+        //console.log(filters)
         if (scope.thead) {
-          urlQuery = setProperty(urlQuery, params, 'sortBy');
-          urlQuery = setProperty(urlQuery, params, 'sortOrder');
+          urlQuery = scope.setProperty(urlQuery, params, 'sortBy');
+          urlQuery = scope.setProperty(urlQuery, params, 'sortOrder');
         }
         if (scope.pagination) {
-          urlQuery = setProperty(urlQuery, params, 'page');
-          urlQuery = setProperty(urlQuery, params, 'count');
+          urlQuery = scope.setProperty(urlQuery, params, 'page');
+          urlQuery = scope.setProperty(urlQuery, params, 'count');
         }
         if (attrs.filters) {
-          urlQuery = joinObjects(urlQuery, filters);
+          urlQuery = scope.joinObjects(urlQuery, filters);
         }
         return Object.keys(urlQuery).map(function(key) {
           value = urlQuery[key];
@@ -105,27 +106,47 @@ angular.module('ngTasty.table', [])
         }).join('&');
       };
 
-      updateResourceWatch = function (newValue, oldValue){
-        if (newValue !== oldValue) {
-          scope.url = buildUrl(scope.params, scope[attrs.filters]);
-          scope[attrs.resource](scope.url).then(function (resource) {
-            setDirectivesValues(resource);
-          });
-        }
+      debounce = function(func, wait, immediate) {
+        var timeout;
+        return function() {
+          var context = this, args = arguments;
+          clearTimeout(timeout);
+          timeout = setTimeout(function() {
+            timeout = null;
+            func.apply(context, args);
+          }, wait);
+        };
       };
 
-      $timeout(function() {
+      scope.updateResource = debounce(function() {
+        scope.url = scope.buildUrl(scope.params, scope[attrs.filters]);
+        scope[attrs.resource](scope.url).then(function (resource) {
+          scope.setDirectivesValues(resource);
+        });
+      }, 100);
+
+      scope.initDirective = function () {
         scope.params['sortBy'] = undefined;
         scope.params['sortOrder'] = 'asc';
         scope.params['page'] = 1;
         scope.params['count'] = 5;
-      }, 100);
-
+        scope.updateResource();
+      };
+      
       // AngularJs $watch callbacks
       if (attrs.filters) {
-        scope.$watch(attrs.filters, updateResourceWatch, true);
+        scope.$watch(attrs.filters, function (newValue, oldValue){
+          if (newValue !== oldValue) {
+            scope.updateResource();
+          }
+        }, true);
       }
-      scope.$watch('params', updateResourceWatch, true);
+      scope.$watch('params', function (newValue, oldValue){
+        if (newValue !== oldValue) {
+          scope.updateResource();
+        }
+      }, true);
+      scope.initDirective();
     }
   };
 }])
@@ -153,6 +174,7 @@ angular.module('ngTasty.table', [])
 
       // Thead it's called
       tastyTable.$scope.thead = true;
+      tastyTable.$scope.params['thead'] = true;
 
       scope.fields = {};
       init = true;
@@ -239,6 +261,7 @@ angular.module('ngTasty.table', [])
 
       // Pagination it's called
       tastyTable.$scope.pagination = true;
+      tastyTable.$scope.params['pagination'] = true;
 
       /* In the future you will have a way to change
        * these values by an isolate optional scope variable,
@@ -350,3 +373,50 @@ angular.module('ngTasty.table', [])
     }
   };
 });
+angular.module("template/table/tasty-head.html", []).run(["$templateCache", function($templateCache) {
+  $templateCache.put("template/table/tasty-head.html",
+    "<tr>\n" +
+    "  <th ng-repeat=\"column in header.columns\" \n" +
+    "  ng-class=\"{active: column.key == header.sortBy}\"\n" +
+    "  ng-click=\"sortBy(column)\">\n" +
+    "    <span ng-bind=\"column.name\"></span>\n" +
+    "    <span ng-if=\"isSortUp(column)\" class=\"fa fa-sort-up\"></span>\n" +
+    "    <span ng-if=\"isSortDown(column)\" class=\"fa fa-sort-down\"></span>\n" +
+    "  </th> \n" +
+    "</tr>");
+}]);
+
+angular.module("template/table/tasty-pagination.html", []).run(["$templateCache", function($templateCache) {
+  $templateCache.put("template/table/tasty-pagination.html",
+    "<div class=\"row\">\n" +
+    "  <div class=\"col-md-3 text-left\">\n" +
+    "    <div class=\"btn-group\">\n" +
+    "      <button type=\"button\" class=\"btn btn-default\" \n" +
+    "      ng-repeat=\"count in pagListCount\" \n" +
+    "      ng-class=\"{active: count == pagination.count}\" \n" +
+    "      ng-click=\"page.setCount(count)\" ng-bind=\"count\"></button>\n" +
+    "    </div>\n" +
+    "  </div>\n" +
+    "  <div class=\"col-md-6 text-center\">\n" +
+    "    <ul class=\"pagination\">\n" +
+    "      <li ng-class=\"{disabled: pagHideMinRange }\">\n" +
+    "        <span ng-click=\"page.previous()\">&laquo;</span>\n" +
+    "      </li>\n" +
+    "      <li ng-repeat=\"numPage in rangePage\" ng-class=\"{active: numPage == pagination.page}\">\n" +
+    "        <span ng-click=\"page.get(numPage)\">\n" +
+    "          <span ng-bind=\"numPage\"></span>\n" +
+    "          <span class=\"sr-only\" ng-if=\"numPage == pagination.page\">(current)</span>\n" +
+    "        </span>\n" +
+    "      </li>\n" +
+    "      <li ng-class=\"{disabled: pagHideMaxRange }\">\n" +
+    "        <span ng-click=\"page.remaining()\">&raquo;</span>\n" +
+    "      </li>\n" +
+    "    </ul>\n" +
+    "  </div>\n" +
+    "  <div class=\"col-md-3 text-right\">\n" +
+    "    <p>Page <span ng-bind=\"pagination.page\"></span> \n" +
+    "    of <span ng-bind=\"pagination.pages\"></span>,\n" +
+    "    of <span ng-bind=\"pagination.size\"></span> entries</p>\n" +
+    "  </div>\n" +
+    "</div>");
+}]);
