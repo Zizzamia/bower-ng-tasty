@@ -2,11 +2,11 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.2.2-rc.1 - 2014-08-07
+ * Version: 0.2.2 - 2014-08-07
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.tpls", "ngTasty.table"]);
-angular.module("ngTasty.tpls", ["template/table/tasty-head.html","template/table/tasty-pagination.html"]);
+angular.module("ngTasty.tpls", ["template/table/head.html","template/table/pagination.html"]);
 /**
  * @ngdoc directive
  * @name tastyTable
@@ -167,7 +167,7 @@ angular.module('ngTasty.table', [])
     restrict: 'AE',
     require: '^tastyTable',
     scope: {},
-    templateUrl: 'template/table/tasty-head.html',
+    templateUrl: 'template/table/head.html',
     link: function (scope, element, attrs, tastyTable) {
       'use strict';
       var cleanFieldName, setFields, init;
@@ -252,7 +252,7 @@ angular.module('ngTasty.table', [])
     restrict: 'AE',
     require: '^tastyTable',
     scope: {},
-    templateUrl: 'template/table/tasty-pagination.html',
+    templateUrl: 'template/table/pagination.html',
     link: function (scope, element, attrs, tastyTable) {
       'use strict';
       var getPage, setCount, setPaginationRange,
@@ -373,50 +373,50 @@ angular.module('ngTasty.table', [])
     }
   };
 });
-angular.module("template/table/tasty-head.html", []).run(["$templateCache", function($templateCache) {
-  $templateCache.put("template/table/tasty-head.html",
-    "<tr>\n" +
-    "  <th ng-repeat=\"column in header.columns\" \n" +
-    "  ng-class=\"{active: column.key == header.sortBy}\"\n" +
-    "  ng-click=\"sortBy(column)\">\n" +
-    "    <span ng-bind=\"column.name\"></span>\n" +
-    "    <span ng-if=\"isSortUp(column)\" class=\"fa fa-sort-up\"></span>\n" +
-    "    <span ng-if=\"isSortDown(column)\" class=\"fa fa-sort-down\"></span>\n" +
-    "  </th> \n" +
-    "</tr>");
+angular.module('template/table/head.html', []).run(['$templateCache', function($templateCache) {
+  $templateCache.put('template/table/head.html',
+    '<tr>\n' +
+    '  <th ng-repeat="column in header.columns" \n' +
+    '  ng-class="{active: column.key == header.sortBy}"\n' +
+    '  ng-click="sortBy(column)">\n' +
+    '    <span ng-bind="column.name"></span>\n' +
+    '    <span ng-if="isSortUp(column)" class="fa fa-sort-up"></span>\n' +
+    '    <span ng-if="isSortDown(column)" class="fa fa-sort-down"></span>\n' +
+    '  </th> \n' +
+    '</tr>');
 }]);
 
-angular.module("template/table/tasty-pagination.html", []).run(["$templateCache", function($templateCache) {
-  $templateCache.put("template/table/tasty-pagination.html",
-    "<div class=\"row\">\n" +
-    "  <div class=\"col-md-3 text-left\">\n" +
-    "    <div class=\"btn-group\">\n" +
-    "      <button type=\"button\" class=\"btn btn-default\" \n" +
-    "      ng-repeat=\"count in pagListCount\" \n" +
-    "      ng-class=\"{active: count == pagination.count}\" \n" +
-    "      ng-click=\"page.setCount(count)\" ng-bind=\"count\"></button>\n" +
-    "    </div>\n" +
-    "  </div>\n" +
-    "  <div class=\"col-md-6 text-center\">\n" +
-    "    <ul class=\"pagination\">\n" +
-    "      <li ng-class=\"{disabled: pagHideMinRange }\">\n" +
-    "        <span ng-click=\"page.previous()\">&laquo;</span>\n" +
-    "      </li>\n" +
-    "      <li ng-repeat=\"numPage in rangePage\" ng-class=\"{active: numPage == pagination.page}\">\n" +
-    "        <span ng-click=\"page.get(numPage)\">\n" +
-    "          <span ng-bind=\"numPage\"></span>\n" +
-    "          <span class=\"sr-only\" ng-if=\"numPage == pagination.page\">(current)</span>\n" +
-    "        </span>\n" +
-    "      </li>\n" +
-    "      <li ng-class=\"{disabled: pagHideMaxRange }\">\n" +
-    "        <span ng-click=\"page.remaining()\">&raquo;</span>\n" +
-    "      </li>\n" +
-    "    </ul>\n" +
-    "  </div>\n" +
-    "  <div class=\"col-md-3 text-right\">\n" +
-    "    <p>Page <span ng-bind=\"pagination.page\"></span> \n" +
-    "    of <span ng-bind=\"pagination.pages\"></span>,\n" +
-    "    of <span ng-bind=\"pagination.size\"></span> entries</p>\n" +
-    "  </div>\n" +
-    "</div>");
+angular.module('template/table/pagination.html', []).run(['$templateCache', function($templateCache) {
+  $templateCache.put('template/table/pagination.html',
+    '<div class="row">\n' +
+    '  <div class="col-md-3 text-left">\n' +
+    '    <div class="btn-group">\n' +
+    '      <button type="button" class="btn btn-default" \n' +
+    '      ng-repeat="count in pagListCount" \n' +
+    '      ng-class="{active: count == pagination.count}" \n' +
+    '      ng-click="page.setCount(count)" ng-bind="count"></button>\n' +
+    '    </div>\n' +
+    '  </div>\n' +
+    '  <div class="col-md-6 text-center">\n' +
+    '    <ul class="pagination">\n' +
+    '      <li ng-class="{disabled: pagHideMinRange }">\n' +
+    '        <span ng-click="page.previous()">&laquo;</span>\n' +
+    '      </li>\n' +
+    '      <li ng-repeat="numPage in rangePage" ng-class="{active: numPage == pagination.page}">\n' +
+    '        <span ng-click="page.get(numPage)">\n' +
+    '          <span ng-bind="numPage"></span>\n' +
+    '          <span class="sr-only" ng-if="numPage == pagination.page">(current)</span>\n' +
+    '        </span>\n' +
+    '      </li>\n' +
+    '      <li ng-class="{disabled: pagHideMaxRange }">\n' +
+    '        <span ng-click="page.remaining()">&raquo;</span>\n' +
+    '      </li>\n' +
+    '    </ul>\n' +
+    '  </div>\n' +
+    '  <div class="col-md-3 text-right">\n' +
+    '    <p>Page <span ng-bind="pagination.page"></span> \n' +
+    '    of <span ng-bind="pagination.pages"></span>,\n' +
+    '    of <span ng-bind="pagination.size"></span> entries</p>\n' +
+    '  </div>\n' +
+    '</div>');
 }]);

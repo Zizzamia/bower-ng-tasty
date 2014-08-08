@@ -2,7 +2,7 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.2.2-rc.1 - 2014-08-07
+ * Version: 0.2.2 - 2014-08-07
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.table"]);
@@ -166,7 +166,7 @@ angular.module('ngTasty.table', [])
     restrict: 'AE',
     require: '^tastyTable',
     scope: {},
-    templateUrl: 'template/table/tasty-head.html',
+    templateUrl: 'template/table/head.html',
     link: function (scope, element, attrs, tastyTable) {
       'use strict';
       var cleanFieldName, setFields, init;
@@ -251,7 +251,7 @@ angular.module('ngTasty.table', [])
     restrict: 'AE',
     require: '^tastyTable',
     scope: {},
-    templateUrl: 'template/table/tasty-pagination.html',
+    templateUrl: 'template/table/pagination.html',
     link: function (scope, element, attrs, tastyTable) {
       'use strict';
       var getPage, setCount, setPaginationRange,
