@@ -2,7 +2,7 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.2.3 - 2014-08-11
+ * Version: 0.2.4 - 2014-08-13
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.filter","ngTasty.service","ngTasty.table"]);
@@ -35,39 +35,46 @@ angular.module('ngTasty.filter.cleanFieldName', [])
 });
 
 /**
- * @ngdoc range
- * @name toDateString
+ * @ngdoc filter
+ * @name range
+ * @kind function
  *
  * @description
- * Calling range will return ...
- * I got ispiration of the code from this page
- * http://stackoverflow.com/questions/8273047/javascript-function-similar-to-python-range
+ * Create a list containing arithmetic progressions. The arguments must 
+ * be plain integers. If the step argument is omitted, it defaults to 1. 
+ * If the start argument is omitted, it defaults to 0.
  *
  * @example
   ng-repeat="n in [] | range:1:30"
- *
  */
-angular.module('ngTasty.filter.range', [])
-.filter('range', function() {
-  return function(start, stop, step) {
-    var list;
-    list = [];
-    if (typeof stop === 'undefined'){
-      stop = start;
-      start = 0;
-    }
-    if (typeof step === 'undefined'){
-      step = 1;
-    }
-    if ((step > 0 && start >= stop) || (step < 0 && start <= stop)){
-      return [];
-    }
-    for (var i = start; step > 0 ? i < stop : i > stop; i += step){
-      list.push(i);
-    }
-    return list;
-  };
-});
+angular.module('ngTasty.filter.range', ['ngTasty.service.filterInt'])
+.filter('range', [
+  'filterInt',
+  function(filterInt) {
+    return function(input, start, stop, step) {
+      start = filterInt(start);
+      stop = filterInt(stop);
+      step = filterInt(step);
+      if (isNaN(start)) {
+        start = 0;
+      }
+      if (isNaN(stop)) {
+        stop = start;
+        start = 0;
+      }
+      if (isNaN(step)) {
+        step = 1;
+      }
+      if ((step > 0 && start >= stop) || (step < 0 && start <= stop)){
+        return [];
+      }
+      for (var i = start; step > 0 ? i < stop : i > stop; i += step){
+        input.push(i);
+      }
+      return input;
+    };
+  }
+]);
 
 /**
  * @ngdoc 
@@ -79,6 +86,20 @@ angular.module('ngTasty.service', [
   'ngTasty.service.setProperty',
   'ngTasty.service.joinObjects'
 ]);
+
+/**
+ * @ngdoc 
+ * @name 
+ *
+ */
+angular.module('ngTasty.service.filterInt', [])
+.factory('filterInt', function() {
+  return function (value) {
+    if(/^(\-|\+)?([0-9]+|Infinity)$/.test(value))
+      return Number(value);
+    return NaN;
+  }
+});
 
 /**
  * @ngdoc 
@@ -99,7 +120,7 @@ angular.module('ngTasty.service.debounce', [])
           func.apply(context, args);
         }, wait);
       };
-    }
+    };
   }
 ]);
 
@@ -111,11 +132,12 @@ angular.module('ngTasty.service.debounce', [])
 angular.module('ngTasty.service.setProperty', [])
 .factory('setProperty', function() {
   return function(objOne, objTwo, attrname) {
-    if (angular.isDefined(objTwo[attrname])) {
+    if (typeof objTwo[attrname] !== 'undefined' && 
+        objTwo[attrname] !== null) {
       objOne[attrname] = objTwo[attrname];
     }
     return objOne;
-  }
+  };
 });
 
 /**
@@ -160,46 +182,69 @@ angular.module('ngTasty.table', [
     'sortBy': 'sort-by',
     'sortOrder': 'sort-order',
   },
-  resource: undefined
+  resource: undefined,
+  resourceCallback: undefined
 })
 .controller('TableController', [
   '$scope', 
   '$attrs',
+  '$timeout',
+  '$filter',
   'tableConfig',
   'debounce',
   'setProperty',
   'joinObjects',
-  function($scope, $attrs, tableConfig, debounce, setProperty, joinObjects) {
+  function($scope, $attrs, $timeout, $filter, tableConfig, debounce, setProperty, joinObjects) {
     'use strict';
     this.$scope = $scope;
 
     // Default configs
     $scope.query = tableConfig.query;
     $scope.resource = tableConfig.resource;
+    $scope.resourceCallback = tableConfig.resourceCallback;
 
-    // Set custom configs
-    if (angular.isDefined($attrs.query)) {
-      $scope.query = $scope.$parent.$eval($attrs.query);
-    }
-    if (!angular.isDefined($attrs.resource)) {
-      throw 'AngularJS tastyTable directive: miss the resource attribute';
-    } else {
-      $scope.resource = $scope.$parent.$eval($attrs.resource);
-      if (!$scope.resource) {
-        throw 'AngularJS tastyTable directive: the resource ('+
-            $attrs.resource + ') callback it\'s undefined';
-      }
-    }
-
+    // Defualt variables
+    $scope.clientSide = true;
     $scope.url = '';
     $scope.header = {
       'columns': []
     };
     $scope.rows = [];
     $scope.params = {};
-    $scope.pagination = {};
+    $scope.pagination = {
+      'count': 5,
+      'page': 1,
+      'pages': 1,
+      'size': 1
+    };
     $scope.theadDirective = false;
     $scope.paginationDirective = false;
+
+    // Set custom configs
+    if (angular.isDefined($attrs.query)) {
+      $scope.query = $scope.$parent.$eval($attrs.query);
+    }
+    if (!angular.isDefined($attrs.resource) && !angular.isDefined($attrs.resourceCallback)) {
+      throw 'AngularJS tastyTable directive: need the resource or resource-callback attribute';
+    }
+    if (angular.isDefined($attrs.resource)) {
+      $scope.resource = $scope.$parent.$eval($attrs.resource);
+      if (!angular.isObject($scope.resource)) {
+        throw 'AngularJS tastyTable directive: the resource ('+
+          $attrs.resource + ') it\'s not an object';
+      } else if (!$scope.resource.header && !$scope.resource.rows) {
+        throw 'AngularJS tastyTable directive: the resource ('+
+          $attrs.resource + ') has the property header or rows undefined';
+      }
+    }
+    if (angular.isDefined($attrs.resourceCallback)) {
+      $scope.resourceCallback = $scope.$parent.$eval($attrs.resourceCallback);
+      if (!angular.isFunction($scope.resourceCallback)) {
+        throw 'AngularJS tastyTable directive: the resource-callback ('+
+          $attrs.resourceCallback + ') it\'s not a function';
+      }
+      $scope.clientSide = false;
+    }    
 
     // In TableController, by using `this` we build an API 
     // for other directives to talk to this one.
@@ -216,13 +261,33 @@ angular.module('ngTasty.table', [
       if (!resource) {
         return false;
       }
-      $scope.rows = resource.rows;
       $scope.header = {
         'columns': resource.header,
-        'sortBy': resource.sortBy,
-        'sortOrder': resource.sortOrder
+        'sortBy': resource.sortBy || $scope.params.sortBy,
+        'sortOrder': resource.sortOrder || $scope.params.sortOrder
       };
-      $scope.pagination = resource.pagination;
+      $scope.rows = resource.rows;
+      $scope.pagination = resource.pagination || $scope.pagination;
+    };
+
+    $scope.buildClientResource = function() {
+      var fromRow, toRow, rowToShow, reverse;
+      if ($scope.theadDirective) {
+        reverse = $scope.header.sortOrder === 'asc' ? false : true;
+        $scope.rows = $filter('orderBy')($scope.rows, $scope.header.sortBy, reverse);
+      }
+      if ($scope.paginationDirective) {
+        $scope.pagination.page = $scope.params.page;
+        $scope.pagination.count = $scope.params.count;
+        $scope.pagination.size = $scope.rows.length;
+        $scope.pagination.pages = Math.ceil($scope.rows.length / $scope.pagination.count);
+        toRow = $scope.pagination.count * $scope.pagination.page;
+        fromRow = toRow - $scope.pagination.count;
+        if (fromRow >= 0 && toRow >= 0) {
+          rowToShow = $scope.rows.slice(fromRow, toRow);
+          $scope.rows = rowToShow;
+        }
+      }
     };
 
     $scope.buildUrl = function(params, filters) {
@@ -248,35 +313,50 @@ angular.module('ngTasty.table', [
       }).join('&');
     };
 
-    $scope.updateResource = debounce(function() {
+    $scope.updateClientSideResource = debounce(function() {
+      $scope.setDirectivesValues($scope.resource);
+      $scope.buildClientResource();
+    }, 100);
+
+    $scope.updateServerSideResource = debounce(function() {
       $scope.url = $scope.buildUrl($scope.params, $scope[$attrs.filters]);
-      $scope[$attrs.resource]($scope.url).then(function (resource) {
+      $scope.resourceCallback($scope.url).then(function (resource) {
         $scope.setDirectivesValues(resource);
       });
     }, 100);
 
-    $scope.initDirective = function () {
+    $scope.initTable = function () {
       $scope.params['sortBy'] = undefined;
       $scope.params['sortOrder'] = 'asc';
       $scope.params['page'] = 1;
       $scope.params['count'] = 5;
-      $scope.updateResource();
+      if ($scope.clientSide) {
+        $scope.updateClientSideResource();
+      } else {
+        $scope.updateServerSideResource();
+      }
     };
     
     // AngularJs $watch callbacks
     if ($attrs.filters) {
       $scope.$watch($attrs.filters, function (newValue, oldValue){
         if (newValue !== oldValue) {
-          $scope.updateResource();
+          $scope.updateServerSideResource();
         }
       }, true);
     }
     $scope.$watch('params', function (newValue, oldValue){
       if (newValue !== oldValue) {
-        $scope.updateResource();
+        if ($scope.clientSide) {
+          $scope.updateClientSideResource();
+        } else {
+          $scope.updateServerSideResource();
+        }
       }
     }, true);
-    $scope.initDirective();
+
+    // Init table
+    $scope.initTable();
   }
 ])
 .directive('tastyTable', function(){
@@ -310,23 +390,34 @@ angular.module('ngTasty.table', [
       templateUrl: 'template/table/head.html',
       link: function (scope, element, attrs, tastyTable) {
         'use strict';
-        var setFields;
-
         // Thead it's called
         tastyTable.activate('thead');
 
         scope.fields = {};
 
-        setFields = function () {
-          var lenHeader, i;
+        scope.setFields = function () {
+          var lenHeader, width, i, active, sortable;
           lenHeader = scope.header.columns.length;
-          for (i = 0; i < lenHeader; i++) {
-            scope.fields[scope.header.columns[i].key] = {
-              'width': parseFloat((100 / lenHeader).toFixed(2)),
-              'sort': $filter('cleanFieldName')(scope.header.columns[i].key)
+          scope.header.columns.forEach(function (column) {
+            width = parseFloat((100 / lenHeader).toFixed(2));
+            sortable = true;
+            active = false;
+            if (scope.notSortBy) {
+              sortable = scope.notSortBy.indexOf(column.key) < 0;
+            }
+            if (column.key === scope.header.sortBy ||
+                '-' + column.key === scope.header.sortBy) {
+              active = true;
+            }
+            scope.fields[column.key] = {
+              'active': active,
+              'sortable': sortable,
+              'width': { 'width': width + '%' },
+              'sort': $filter('cleanFieldName')(column.key)
             };
-          }
-          if (scope.header.sortOrder === 'dsc') {
+          });
+          if (scope.header.sortOrder === 'dsc' &&
+              scope.header.sortBy[0] !== '-') {
             scope.header.sortBy = '-' + scope.header.sortBy;
           }
         };
@@ -364,9 +455,9 @@ angular.module('ngTasty.table', [
         tastyTable.$scope.$watch('header', function (newValue, oldValue){
           if (newValue && (newValue !== oldValue)) {
             scope.header = newValue;
-            setFields();
+            scope.setFields();
           }
-        });
+        }, true);
       }
     };
   }
@@ -476,7 +567,7 @@ angular.module('ngTasty.table', [
           } else {
             scope.pagListCount = [5, 25, 50, 100];
           }
-          scope.rangePage = $filter('range')(scope.pagMinRange, scope.pagMaxRange);
+          scope.rangePage = $filter('range')([], scope.pagMinRange, scope.pagMaxRange);
         };
 
         scope.page = {
@@ -491,7 +582,7 @@ angular.module('ngTasty.table', [
             scope.pagination = newValue;
             setPaginationRange();
           }
-        });
+        }, true);
       }
     };
   }
