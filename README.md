@@ -1,4 +1,4 @@
-# #ngTasty [![Bower version](https://badge.fury.io/bo/ng-tasty.svg)](http://badge.fury.io/bo/ng-tasty) [![NPM version](https://badge.fury.io/js/ng-tasty.svg)](http://badge.fury.io/js/ng-tasty) [![Build Status](https://secure.travis-ci.org/Zizzamia/ng-tasty.svg)](http://travis-ci.org/Zizzamia/ng-tasty)
+# #ngTasty [![Bower version](https://badge.fury.io/bo/ng-tasty.svg)](https://github.com/Zizzamia/bower-ng-tasty) [![NPM version](https://badge.fury.io/js/ng-tasty.svg)](https://www.npmjs.org/package/ng-tasty) [![NPM Downloads](http://img.shields.io/npm/dm/ng-tasty.svg)](https://www.npmjs.org/package/ng-tasty) [![Build Status](https://secure.travis-ci.org/Zizzamia/ng-tasty.svg)](https://travis-ci.org/Zizzamia/ng-tasty)
 > A lightweight, flexible, and tasty collection of reusable UI components for [AngularJS](https://angularjs.org/).
 
 Live demo visit http://zizzamia.com/ng-tasty/
@@ -27,7 +27,13 @@ angular.module('myApp', ['ngTasty']);
 
 ## Changelog
 
-### v0.2.4 (master, released on August 13th 2014)
+### v0.2.5 (master, released on August 21th 2014)
+- Added items-per-page and list-items-per-page settings in table pagination [#15](https://github.com/Zizzamia/ng-tasty/issues/15)
+- Added ngTasty.service.tastyUtil [#24](https://github.com/Zizzamia/ng-tasty/issues/24)
+- Removed all the Grunt dependence [#23](https://github.com/Zizzamia/ng-tasty/issues/23)
+- Fixed table pagination responsive [#18](https://github.com/Zizzamia/ng-tasty/issues/18)
+
+### v0.2.4 (released on August 13th 2014)
 - Added a new table that has sorting and pagination client side
 - Improved `setDirectivesValues` in `ngTasty.table`
 - Fixed issues in `ngTasty.filter.range`
@@ -35,7 +41,16 @@ angular.module('myApp', ['ngTasty']);
 
 ## Creator
 
-**Leonardo Zizzamia**
+Designed and built by Leonardo Zizzamia, like grandma used to make.
 
 - <http://twitter.com/zizzamia>
 - <http://github.com/zizzamia>
+
+[bower]: https://github.com/Zizzamia/bower-ng-tasty
+[bower-badge]: https://badge.fury.io/bo/ng-tasty.svg
+[npm-site]: https://www.npmjs.org/
+[npm]: https://www.npmjs.org/package/ng-tasty
+[npm-badge]: https://badge.fury.io/js/ng-tasty.svg
+[npm-downloads]: http://img.shields.io/npm/dm/ng-tasty.svg
+[travis]: https://travis-ci.org/Zizzamia/ng-tasty
+[travis-badge]: https://secure.travis-ci.org/Zizzamia/ng-tasty.svg
