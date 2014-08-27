@@ -25,20 +25,6 @@ Inject the `ngTasty` module into your app:
 angular.module('myApp', ['ngTasty']);
 ```
 
-## Changelog
-
-### v0.2.5 (master, released on August 21th 2014)
-- Added items-per-page and list-items-per-page settings in table pagination [#15](https://github.com/Zizzamia/ng-tasty/issues/15)
-- Added ngTasty.service.tastyUtil [#24](https://github.com/Zizzamia/ng-tasty/issues/24)
-- Removed all the Grunt dependence [#23](https://github.com/Zizzamia/ng-tasty/issues/23)
-- Fixed table pagination responsive [#18](https://github.com/Zizzamia/ng-tasty/issues/18)
-
-### v0.2.4 (released on August 13th 2014)
-- Added a new table that has sorting and pagination client side
-- Improved `setDirectivesValues` in `ngTasty.table`
-- Fixed issues in `ngTasty.filter.range`
-- Fixed issue in `ngTasty.service.setProperty`
-
 ## Creator
 
 Designed and built by Leonardo Zizzamia, like grandma used to make.
