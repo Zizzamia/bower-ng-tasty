@@ -1,177 +1,3 @@
-/*
- * ng-tasty
- * https://github.com/Zizzamia/ng-tasty
-
- * Version: 0.3.0 - 2014-10-22
- * License: MIT
- */
-angular.module("ngTasty", ["ngTasty.tpls", "ngTasty.filter","ngTasty.service","ngTasty.table"]);
-angular.module("ngTasty.tpls", ["template/table/head.html","template/table/pagination.html"]);
-/**
- * @ngdoc 
- * @name 
- *
- */
-angular.module('ngTasty.filter', [
-  'ngTasty.filter.cleanFieldName',
-  'ngTasty.filter.filterInt',
-  'ngTasty.filter.range'
-]);
-
-/**
- * @ngdoc filter
- * @name cleanFieldName
- *
- * @description
- * Calling toString will return the ...
- *
- * @example
-  ng-bind="key | cleanFieldName"
- *
- */
-angular.module('ngTasty.filter.cleanFieldName', [])
-.filter('cleanFieldName', function() {
-  return function (input) {
-    return input.replace(/[^a-zA-Z0-9-]+/g, '-');
-  };
-});
-
-/**
- * @ngdoc filter
- * @name filterInt
- * @kind function
- *
- */
-angular.module('ngTasty.filter.filterInt', [])
-.filter('filterInt', function() {
-  return function (input) {
-    if(/^(\-|\+)?([0-9]+|Infinity)$/.test(input)) {
-      return Number(input);
-    }
-    return NaN;
-  };
-});
-
-/**
- * @ngdoc filter
- * @name range
- * @kind function
- *
- * @description
- * Create a list containing arithmetic progressions. The arguments must 
- * be plain integers. If the step argument is omitted, it defaults to 1. 
- * If the start argument is omitted, it defaults to 0.
- *
- * @example
-  ng-repeat="n in [] | range:1:30"
- */
-angular.module('ngTasty.filter.range', [])
-.filter('range', ["$filter", function($filter) {
-  return function(input, start, stop, step) {
-    start = $filter('filterInt')(start);
-    stop = $filter('filterInt')(stop);
-    step = $filter('filterInt')(step);
-    if (isNaN(start)) {
-      start = 0;
-    }
-    if (isNaN(stop)) {
-      stop = start;
-      start = 0;
-    }
-    if (isNaN(step)) {
-      step = 1;
-    }
-    if ((step > 0 && start >= stop) || (step < 0 && start <= stop)){
-      return [];
-    }
-    for (var i = start; step > 0 ? i < stop : i > stop; i += step){
-      input.push(i);
-    }
-    return input;
-  };
-}]);
-
-/**
- * @ngdoc 
- * @name 
- *
- */
-angular.module('ngTasty.service', [
-  'ngTasty.service.tastyUtil',
-  'ngTasty.service.debounce',
-  'ngTasty.service.setProperty',
-  'ngTasty.service.joinObjects'
-]);
-
-/**
- * @ngdoc 
- * @name 
- *
- */
-angular.module('ngTasty.service.tastyUtil', [
-  'ngTasty.service.debounce',
-  'ngTasty.service.setProperty',
-  'ngTasty.service.joinObjects'
-])
-.factory('tastyUtil', ["debounce", "setProperty", "joinObjects", function(debounce, setProperty, joinObjects) {
-  return {
-    'debounce': debounce,
-    'setProperty': setProperty,
-    'joinObjects': joinObjects
-  };
-}]);
-
-/**
- * @ngdoc 
- * @name 
- *
- */
-angular.module('ngTasty.service.debounce', [])
-.factory('debounce', ["$timeout", function($timeout) {
-  return function(func, wait, immediate) {
-    var timeout;
-    return function() {
-      var context = this, args = arguments;
-      $timeout.cancel(timeout);
-      timeout = $timeout(function() {
-        timeout = null;
-        func.apply(context, args);
-      }, wait);
-    };
-  };
-}]);
-
-/**
- * @ngdoc 
- * @name 
- *
- */
-angular.module('ngTasty.service.setProperty', [])
-.factory('setProperty', function() {
-  return function(objOne, objTwo, attrname) {
-    if (typeof objTwo[attrname] !== 'undefined' && 
-        objTwo[attrname] !== null) {
-      objOne[attrname] = objTwo[attrname];
-    }
-    return objOne;
-  };
-});
-
-/**
- * @ngdoc 
- * @name 
- *
- */
-angular.module('ngTasty.service.joinObjects', [])
-.factory('joinObjects', ["setProperty", function(setProperty) {
-  return function(objOne, objTwo) {
-    for (var attrname in objTwo) {
-      setProperty(objOne, objTwo, attrname);
-    }
-    return objOne;
-  };
-}]);
-
 /**
  * @ngdoc directive
  * @name tastyTable
@@ -198,7 +24,7 @@ angular.module('ngTasty.table', [
   itemsPerPage: 5,
   bindOnce: true
 })
-.controller('TableController', ["$scope", "$attrs", "$timeout", "$filter", "$parse", "tableConfig", "tastyUtil", function($scope, $attrs, $timeout, $filter, $parse, tableConfig, tastyUtil) {
+.controller('TableController', function($scope, $attrs, $timeout, $filter, $parse, tableConfig, tastyUtil) {
   'use strict';
   var listScopeToWatch;
   this.$scope = $scope;
@@ -431,7 +257,7 @@ angular.module('ngTasty.table', [
 
   // Init table
   $scope.initTable();
-}])
+})
 .directive('tastyTable', function(){
   return {
     restrict: 'A',
@@ -451,7 +277,7 @@ angular.module('ngTasty.table', [
   </table>
  *
  */
-.directive('tastyThead', ["$filter", function($filter) {
+.directive('tastyThead', function($filter) {
   return {
     restrict: 'AE',
     require: '^tastyTable',
@@ -534,7 +360,7 @@ angular.module('ngTasty.table', [
       });
     }
   };
-}])
+})
 
 /**
  * @ngdoc directive
@@ -549,7 +375,7 @@ angular.module('ngTasty.table', [
   </div>
  *
  */
-.controller('TablePaginationController', ["$scope", "$attrs", "tableConfig", function($scope, $attrs, tableConfig) {
+.controller('TablePaginationController', function($scope, $attrs, tableConfig) {
   if (angular.isDefined($attrs.itemsPerPage)) {
     $scope.itemsPerPage = $scope.$parent[$attrs.itemsPerPage];
   }
@@ -559,8 +385,8 @@ angular.module('ngTasty.table', [
   // Default configs
   $scope.itemsPerPage = $scope.itemsPerPage || tableConfig.itemsPerPage;
   $scope.listItemsPerPage = $scope.listItemsPerPage || tableConfig.listItemsPerPage;
-}])
-.directive('tastyPagination', ["$filter", function($filter) {
+})
+.directive('tastyPagination', function($filter) {
   return {
     restrict: 'AE',
     require: '^tastyTable',
@@ -681,52 +507,4 @@ angular.module('ngTasty.table', [
       scope.page.setCount(scope.itemsPerPage);
     }
   };
-}]);
-
-angular.module('template/table/head.html', []).run(['$templateCache', function($templateCache) {
-  $templateCache.put('template/table/head.html',
-    '<tr>\n' +
-    '  <th ng-repeat="column in columns track by $index" \n' +
-    '  ng-class="classToShow(column)"\n' +
-    '  ng-style="column.width" ng-click="sortBy(column)">\n' +
-    '    <span ng-bind="::column.name"></span>\n' +
-    '    <span ng-if="column.isSortUp" class="fa fa-sort-up"></span>\n' +
-    '    <span ng-if="column.isSortDown" class="fa fa-sort-down"></span>\n' +
-    '  </th> \n' +
-    '</tr>');
-}]);
-
-angular.module('template/table/pagination.html', []).run(['$templateCache', function($templateCache) {
-  $templateCache.put('template/table/pagination.html',
-    '<div class="row">\n' +
-    '  <div class="col-xs-3 text-left">\n' +
-    '    <div class="btn-group">\n' +
-    '      <button type="button" class="btn btn-default" \n' +
-    '      ng-repeat="count in listItemsPerPageShow" \n' +
-    '      ng-class="classPaginationCount(count)" \n' +
-    '      ng-click="page.setCount(count)" ng-bind="count"></button>\n' +
-    '    </div>\n' +
-    '  </div>\n' +
-    '  <div class="col-xs-6 text-center">\n' +
-    '    <ul class="pagination">\n' +
-    '      <li ng-class="classPageMinRange">\n' +
-    '        <span ng-click="page.previous()">&laquo;</span>\n' +
-    '      </li>\n' +
-    '      <li ng-repeat="numPage in rangePage" ng-class="classNumPage(numPage)">\n' +
-    '        <span ng-click="page.get(numPage)">\n' +
-    '          <span ng-bind="numPage"></span>\n' +
-    '          <span class="sr-only" ng-if="classNumPage(numPage)">(current)</span>\n' +
-    '        </span>\n' +
-    '      </li>\n' +
-    '      <li ng-class="classPageMaxRange">\n' +
-    '        <span ng-click="page.remaining()">&raquo;</span>\n' +
-    '      </li>\n' +
-    '    </ul>\n' +
-    '  </div>\n' +
-    '  <div class="col-xs-3 text-right">\n' +
-    '    <p>Page <span ng-bind="pagination.page"></span> \n' +
-    '    of <span ng-bind="pagination.pages"></span>,\n' +
-    '    of <span ng-bind="pagination.size"></span> entries</p>\n' +
-    '  </div>\n' +
-    '</div>');
-}]);
+});

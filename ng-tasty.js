@@ -2,7 +2,7 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.2.7 - 2014-09-08
+ * Version: 0.3.0 - 2014-10-22
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.filter","ngTasty.service","ngTasty.table"]);
@@ -31,7 +31,7 @@ angular.module('ngTasty.filter', [
 angular.module('ngTasty.filter.cleanFieldName', [])
 .filter('cleanFieldName', function() {
   return function (input) {
-    return input.replace(/[^a-zA-Z0-9-]+/g, '-').toLowerCase();
+    return input.replace(/[^a-zA-Z0-9-]+/g, '-');
   };
 });
 
@@ -193,19 +193,48 @@ angular.module('ngTasty.table', [
     'sortBy': 'sort-by',
     'sortOrder': 'sort-order',
   },
-  resource: undefined,
-  resourceCallback: undefined,
   listItemsPerPage: [5, 25, 50, 100],
-  itemsPerPage: 5
+  itemsPerPage: 5,
+  bindOnce: true
 })
-.controller('TableController', ["$scope", "$attrs", "$timeout", "$filter", "tableConfig", "tastyUtil", function($scope, $attrs, $timeout, $filter, tableConfig, tastyUtil) {
+.controller('TableController', ["$scope", "$attrs", "$timeout", "$filter", "$parse", "tableConfig", "tastyUtil", function($scope, $attrs, $timeout, $filter, $parse, tableConfig, tastyUtil) {
   'use strict';
+  var listScopeToWatch;
   this.$scope = $scope;
 
+  listScopeToWatch = ['filters', 'query', 'resource', 'resourceCallback'];
+  listScopeToWatch.forEach(function (scopeName) {
+    var lastValue, parentGet, compare, parentSet, parentValueWatch;
+    if (!$attrs[scopeName]) {
+      return;
+    }
+    parentGet = $parse($attrs[scopeName]);
+    if (parentGet.literal) {
+      compare = equals;
+    } else {
+      compare = function(a,b) { return a === b || (a !== a && b !== b); };
+    }
+    parentSet = parentGet.assign;
+    lastValue = $scope[scopeName] = parentGet($scope.$parent);
+    parentValueWatch = function parentValueWatch(parentValue) {
+      if (!compare(parentValue, $scope[scopeName])) {
+        // we are out of sync and need to copy
+        if (!compare(parentValue, lastValue)) {
+          // parent changed and it has precedence
+          $scope[scopeName] = parentValue;
+        } else {
+          // if the parent can be assigned then do so
+          parentSet($scope.$parent, parentValue = $scope[scopeName]);
+        }
+      }
+      return lastValue = parentValue;
+    };
+    parentValueWatch.$stateful = true;
+    $scope.$parent.$watch($parse($attrs[scopeName], parentValueWatch), null, parentGet.literal);
+  });
+
   // Default configs
-  $scope.query = tableConfig.query;
-  $scope.resource = tableConfig.resource;
-  $scope.resourceCallback = tableConfig.resourceCallback;
+  $scope.query = $scope.query || tableConfig.query;
 
   // Defualt variables
   $scope.clientSide = true;
@@ -228,14 +257,10 @@ angular.module('ngTasty.table', [
    * In the future you will have a way to change
    * these values by an isolate optional scope variable,
    * more info here https://github.com/angular/angular.js/issues/6404 */
-  if (angular.isDefined($attrs.query)) {
-    $scope.query = $scope.$parent[$attrs.query];
-  }
   if (!angular.isDefined($attrs.resource) && !angular.isDefined($attrs.resourceCallback)) {
     throw 'AngularJS tastyTable directive: need the resource or resource-callback attribute';
   }
   if (angular.isDefined($attrs.resource)) {
-    $scope.resource = $scope.$parent[$attrs.resource];
     if (!angular.isObject($scope.resource)) {
       throw 'AngularJS tastyTable directive: the resource ('+
         $attrs.resource + ') it\'s not an object';
@@ -245,7 +270,6 @@ angular.module('ngTasty.table', [
     }
   }
   if (angular.isDefined($attrs.resourceCallback)) {
-    $scope.resourceCallback = $scope.$parent[$attrs.resourceCallback];
     if (!angular.isFunction($scope.resourceCallback)) {
       throw 'AngularJS tastyTable directive: the resource-callback ('+
         $attrs.resourceCallback + ') it\'s not a function';
@@ -264,6 +288,8 @@ angular.module('ngTasty.table', [
     $scope.params[key] = value;
   };
 
+  this.bindOnce = tableConfig.bindOnce;
+
   $scope.setDirectivesValues = function (resource) {
     var sortBy;
     if (!angular.isObject(resource)) {
@@ -272,6 +298,17 @@ angular.module('ngTasty.table', [
     } else if (!resource.header && !resource.rows) {
       throw 'AngularJS tastyTable directive: the resource '+
             'has the property header or rows undefined';
+    }
+    // Assuming if one header uses just one key it's based on the new pattern.
+    // [feature request] simplified header for resources #37 by @WebReflection
+    if (Object.keys(resource.header[0]).length === 1) {
+      resource.header = resource.header.map(function (header) {
+        var key = Object.keys(header)[0];
+        return {
+          key: key,
+          name: header[key]
+        };
+      });
     }
     sortBy = resource.sortBy || $scope.params.sortBy;
     sortBy = sortBy || resource.header[0].key;
@@ -297,6 +334,9 @@ angular.module('ngTasty.table', [
         });
       }
       $scope.rows = $filter('orderBy')($scope.rows, listSortBy, reverse);
+    }
+    if ($attrs.filters) {
+      $scope.rows = $filter('filter')($scope.rows, $scope.filters);
     }
     if ($scope.paginationDirective) {
       $scope.pagination.page = $scope.params.page;
@@ -341,7 +381,7 @@ angular.module('ngTasty.table', [
   }, 100);
 
   $scope.updateServerSideResource = tastyUtil.debounce(function() {
-    $scope.url = $scope.buildUrl($scope.params, $scope[$attrs.filters]);
+    $scope.url = $scope.buildUrl($scope.params, $scope.filters);
     $scope.resourceCallback($scope.url, $scope.params).then(function (resource) {
       $scope.setDirectivesValues(resource);
     });
@@ -361,9 +401,13 @@ angular.module('ngTasty.table', [
   
   // AngularJs $watch callbacks
   if ($attrs.filters) {
-    $scope.$watch($attrs.filters, function (newValue, oldValue){
+    $scope.$watch('filters', function (newValue, oldValue){
       if (newValue !== oldValue) {
-        $scope.updateServerSideResource();
+        if ($scope.clientSide) {
+          $scope.updateClientSideResource();
+        } else {
+          $scope.updateServerSideResource();
+        }
       }
     }, true);
   }
@@ -377,9 +421,8 @@ angular.module('ngTasty.table', [
     }
   });
   if ($scope.resource) {
-    $scope.$parent.$watch($attrs.resource, function (newValue, oldValue){
+    $scope.$watch('resource', function (newValue, oldValue){
       if (newValue !== oldValue) {
-        $scope.resource = newValue;
         $scope.updateClientSideResource();
       }
     }, true);
@@ -419,6 +462,7 @@ angular.module('ngTasty.table', [
       'use strict';
       // Thead it's called
       tastyTable.activate('thead');
+      scope.bindOnce = tastyTable.bindOnce;
 
       scope.columns = [];
 
