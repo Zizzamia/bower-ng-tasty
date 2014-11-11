@@ -7,7 +7,8 @@ angular.module('ngTasty.service', [
   'ngTasty.service.tastyUtil',
   'ngTasty.service.debounce',
   'ngTasty.service.setProperty',
-  'ngTasty.service.joinObjects'
+  'ngTasty.service.joinObjects',
+  'ngTasty.service.webSocket'
 ]);
 
 /**
@@ -71,9 +72,12 @@ angular.module('ngTasty.service.setProperty', [])
  */
 angular.module('ngTasty.service.joinObjects', [])
 .factory('joinObjects', function(setProperty) {
-  return function(objOne, objTwo) {
+  return function(objOne, objTwo, listKeyNotJoin) {
+    listKeyNotJoin = listKeyNotJoin || [];
     for (var attrname in objTwo) {
-      setProperty(objOne, objTwo, attrname);
+      if (listKeyNotJoin.indexOf(attrname) < 0) {
+        setProperty(objOne, objTwo, attrname);
+      }
     }
     return objOne;
   };
