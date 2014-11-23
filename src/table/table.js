@@ -34,6 +34,8 @@ angular.module('ngTasty.table', [
   'use strict';
   var listScopeToWatch, initTable;
   this.$scope = $scope;
+  $scope.init = {};
+  $scope.query = {};
 
   listScopeToWatch = ['filters', 'init', 'query', 'resource', 'resourceCallback'];
   listScopeToWatch.forEach(function (scopeName) {
@@ -67,8 +69,10 @@ angular.module('ngTasty.table', [
   });
 
   // Default configs
-  $scope.query = $scope.query || tableConfig.query;
-  $scope.init = $scope.init || {};
+  $scope.query.page = $scope.query.page || tableConfig.query.page;
+  $scope.query.count = $scope.query.count || tableConfig.query.count;
+  $scope.query.sortBy = $scope.query.sortBy || tableConfig.query.sortBy;
+  $scope.query.sortOrder = $scope.query.sortOrder || tableConfig.query.sortOrder;
   $scope.init.count = $scope.init.count || tableConfig.init.count;
   $scope.init.page = $scope.init.page || tableConfig.init.page;
   $scope.init.sortBy = $scope.init.sortBy || tableConfig.init.sortBy;
@@ -155,6 +159,10 @@ angular.module('ngTasty.table', [
       'sortBy': $scope.params.sortBy,
       'sortOrder': $scope.params.sortOrder
     };
+    if (!$scope.clientSide) {
+      $scope.header.sortBy = $scope.header.sortBy || resource.sortBy;
+      $scope.header.sortOrder = $scope.header.sortOrder || resource.sortOrder;
+    }
     $scope.rows = resource.rows;
     if ($scope.paginationDirective && resource.pagination) {
       $scope.pagination.count = resource.pagination.count;
@@ -327,12 +335,21 @@ angular.module('ngTasty.table', [
         scope.columns = [];
         lenHeader = scope.header.columns.length;
         scope.header.columns.forEach(function (column, index) {
-          width = parseFloat((100 / lenHeader).toFixed(2));
+          column.style = column.style || {};
+          if (!column.style.width) {
+            column.style.width = parseFloat((100 / lenHeader).toFixed(2)) + '%';
+          }
           sortable = true;
           active = false;
           isSorted = '';
-          if (scope.notSortBy) {
-            sortable = scope.notSortBy.indexOf(column.key) < 0;
+          // Not sort column when the key is present in the `notSortBy` list,
+          // and Not sort column when `notSortBy` is an empty list
+          if (angular.isArray(scope.notSortBy)) {
+            if (scope.notSortBy.length) {
+              sortable = scope.notSortBy.indexOf(column.key) < 0;
+            } else {
+              sortable = false;
+            }
           }
           if (column.key === scope.header.sortBy ||
               '-' + column.key === scope.header.sortBy) {
@@ -349,7 +366,7 @@ angular.module('ngTasty.table', [
             'name': column.name,
             'active': active,
             'sortable': sortable,
-            'width': { 'width': width + '%' },
+            'style': column.style,
             'isSorted': isSorted
           });
         });
@@ -361,7 +378,7 @@ angular.module('ngTasty.table', [
       };
 
       scope.sortBy = function (column) {
-        if (scope.notSortBy && scope.notSortBy.indexOf(column.key) >= 0) {
+        if (!column.sortable) {
           return false;
         }
         var columnName, sortOrder;
