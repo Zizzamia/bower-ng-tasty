@@ -2,253 +2,11 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.3.3 - 2014-11-28
+ * Version: 0.4.0 - 2014-12-08
  * License: MIT
  */
-angular.module("ngTasty", ["ngTasty.tpls", "ngTasty.filter","ngTasty.service","ngTasty.table"]);
-angular.module("ngTasty.tpls", ["template/table/head.html","template/table/pagination.html"]);
-/**
- * @ngdoc 
- * @name 
- *
- */
-angular.module('ngTasty.filter', [
-  'ngTasty.filter.cleanFieldName',
-  'ngTasty.filter.filterInt',
-  'ngTasty.filter.range'
-]);
-
-/**
- * @ngdoc filter
- * @name cleanFieldName
- *
- * @description
- * Calling toString will return the ...
- *
- * @example
-  ng-bind="key | cleanFieldName"
- *
- */
-angular.module('ngTasty.filter.cleanFieldName', [])
-.filter('cleanFieldName', function() {
-  return function (input) {
-    return input.replace(/[^a-zA-Z0-9-]+/g, '-');
-  };
-});
-
-/**
- * @ngdoc filter
- * @name filterInt
- * @kind function
- *
- */
-angular.module('ngTasty.filter.filterInt', [])
-.filter('filterInt', function() {
-  return function (input) {
-    if(/^(\-|\+)?([0-9]+|Infinity)$/.test(input)) {
-      return Number(input);
-    }
-    return NaN;
-  };
-});
-
-/**
- * @ngdoc filter
- * @name range
- * @kind function
- *
- * @description
- * Create a list containing arithmetic progressions. The arguments must 
- * be plain integers. If the step argument is omitted, it defaults to 1. 
- * If the start argument is omitted, it defaults to 0.
- *
- * @example
-  ng-repeat="n in [] | range:1:30"
- */
-angular.module('ngTasty.filter.range', [])
-.filter('range', ["$filter", function($filter) {
-  return function(input, start, stop, step) {
-    start = $filter('filterInt')(start);
-    stop = $filter('filterInt')(stop);
-    step = $filter('filterInt')(step);
-    if (isNaN(start)) {
-      start = 0;
-    }
-    if (isNaN(stop)) {
-      stop = start;
-      start = 0;
-    }
-    if (isNaN(step)) {
-      step = 1;
-    }
-    if ((step > 0 && start >= stop) || (step < 0 && start <= stop)){
-      return [];
-    }
-    for (var i = start; step > 0 ? i < stop : i > stop; i += step){
-      input.push(i);
-    }
-    return input;
-  };
-}]);
-
-/**
- * @ngdoc 
- * @name 
- *
- */
-angular.module('ngTasty.service', [
-  'ngTasty.service.tastyUtil',
-  'ngTasty.service.debounce',
-  'ngTasty.service.setProperty',
-  'ngTasty.service.joinObjects',
-  'ngTasty.service.webSocket'
-]);
-
-/**
- * @ngdoc 
- * @name 
- *
- */
-angular.module('ngTasty.service.tastyUtil', [
-  'ngTasty.service.debounce',
-  'ngTasty.service.setProperty',
-  'ngTasty.service.joinObjects'
-])
-.factory('tastyUtil', ["debounce", "setProperty", "joinObjects", function(debounce, setProperty, joinObjects) {
-  return {
-    'debounce': debounce,
-    'setProperty': setProperty,
-    'joinObjects': joinObjects
-  };
-}]);
-
-/**
- * @ngdoc 
- * @name 
- *
- */
-angular.module('ngTasty.service.debounce', [])
-.factory('debounce', ["$timeout", function($timeout) {
-  return function(func, wait, immediate) {
-    var timeout;
-    return function() {
-      var context = this, args = arguments;
-      $timeout.cancel(timeout);
-      timeout = $timeout(function() {
-        timeout = null;
-        func.apply(context, args);
-      }, wait);
-    };
-  };
-}]);
-
-/**
- * @ngdoc 
- * @name 
- *
- */
-angular.module('ngTasty.service.setProperty', [])
-.factory('setProperty', function() {
-  return function(objOne, objTwo, attrname) {
-    if (typeof objTwo[attrname] !== 'undefined' && 
-        objTwo[attrname] !== null) {
-      objOne[attrname] = objTwo[attrname];
-    }
-    return objOne;
-  };
-});
-
-/**
- * @ngdoc 
- * @name 
- *
- */
-angular.module('ngTasty.service.joinObjects', [])
-.factory('joinObjects', ["setProperty", function(setProperty) {
-  return function(objOne, objTwo, listKeyNotJoin) {
-    listKeyNotJoin = listKeyNotJoin || [];
-    for (var attrname in objTwo) {
-      if (listKeyNotJoin.indexOf(attrname) < 0) {
-        setProperty(objOne, objTwo, attrname);
-      }
-    }
-    return objOne;
-  };
-}]);
-
-angular.module('ngTasty.service.webSocket', [
-  'ngTasty.service'
-])
-.factory('WebSocket', function() {
-  
-  return function(url) {
-    var blobURL = URL.createObjectURL(new Blob(['(', function() {
-      var WSWorker = (function() {
-        var _ws;
-
-        var initialize = function(url) {
-          _ws = new WebSocket(url);
-        };
-
-        var on = function(event) {
-          _ws.onmessage = function(response) {
-            var data = JSON.parse(response.data);
-            self.postMessage(data);
-          };
-        };
-
-        var send = function(data) {
-          _ws.send(data);
-        };
-
-        return {
-          initialize: initialize,
-          on: on,
-          send: send
-        };
-
-      })();
-
-      self.addEventListener('message', function(e) {
-        switch (e.data.cmd) {
-          case 'ws_new':
-            WSWorker.initialize(e.data.url);
-            break;
-          case 'ws_on':
-            WSWorker.on(e.data.event, e.data.cb);
-            break;
-          case 'ws_send':
-            WSWorker.send(JSON.stringify(e.data.data));
-            break;
-          default:
-            console.log('Unknown command: ' + e.data.cmd);
-          }
-      });
-
-    }.toString(), ')()'], { type: 'application/javascript' }));
-
-    var _worker = new Worker(blobURL);
-    URL.revokeObjectURL(blobURL);
-
-    _worker.postMessage({ cmd: 'ws_new', url: url });
-
-    return {
-      on: function(event, cb) {
-        _worker.postMessage({ cmd: 'ws_on' });
-        _worker.addEventListener('message', function(e) {
-          if (event === 'all' || e.data.type === event) {
-            cb(e.data);
-          } 
-        });
-      },
-      send: function(data) {
-        _worker.postMessage({ cmd: 'ws_send', data: data });
-      }
-    };
-
-  };
-});
-
+angular.module("ngTasty", ["ngTasty.tpls", "ngTasty.component.table"]);
+angular.module("ngTasty.tpls", ["ngTasty.tpls.TableHead","ngTasty.tpls.TablePagination"]);
 /**
  * @ngdoc directive
  * @name tastyTable
@@ -259,10 +17,12 @@ angular.module('ngTasty.service.webSocket', [
   </table>
  *
  */
-angular.module('ngTasty.table', [
+angular.module('ngTasty.component.table', [
   'ngTasty.filter.cleanFieldName',
   'ngTasty.filter.range',
-  'ngTasty.service.tastyUtil'
+  'ngTasty.service.tastyUtil',
+  'ngTasty.tpls.TableHead',
+  'ngTasty.tpls.TablePagination'
 ])
 .constant('tableConfig', {
   init: {
@@ -281,42 +41,20 @@ angular.module('ngTasty.table', [
   itemsPerPage: 5,
   bindOnce: true
 })
-.controller('TableController', ["$scope", "$attrs", "$timeout", "$filter", "$parse", "tableConfig", "tastyUtil", function($scope, $attrs, $timeout, $filter, $parse, tableConfig, tastyUtil) {
+.controller('TableController', ["$scope", "$attrs", "$timeout", "$filter", "tableConfig", "tastyUtil", function($scope, $attrs, $timeout, $filter, tableConfig, tastyUtil) {
   'use strict';
-  var listScopeToWatch, initTable;
+  var listScopeToWatch, initTable, newScopeName;
   this.$scope = $scope;
   $scope.init = {};
   $scope.query = {};
 
-  listScopeToWatch = ['filters', 'init', 'query', 'resource', 'resourceCallback'];
+  listScopeToWatch = ['bindFilters', 'bindInit', 'bindQuery', 'bindResource', 'bindResourceCallback'];
   listScopeToWatch.forEach(function (scopeName) {
-    var lastValue, parentGet, compare, parentSet, parentValueWatch;
-    if (!$attrs[scopeName]) {
-      return;
+    newScopeName = scopeName.substring(4);
+    newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
+    if ($attrs[scopeName]) {
+      tastyUtil.bindTo(scopeName, $scope, $attrs, newScopeName);
     }
-    parentGet = $parse($attrs[scopeName]);
-    if (parentGet.literal) {
-      compare = equals;
-    } else {
-      compare = function(a,b) { return a === b || (a !== a && b !== b); };
-    }
-    parentSet = parentGet.assign;
-    lastValue = $scope[scopeName] = parentGet($scope.$parent);
-    parentValueWatch = function parentValueWatch(parentValue) {
-      if (!compare(parentValue, $scope[scopeName])) {
-        // we are out of sync and need to copy
-        if (!compare(parentValue, lastValue)) {
-          // parent changed and it has precedence
-          $scope[scopeName] = parentValue;
-        } else {
-          // if the parent can be assigned then do so
-          parentSet($scope.$parent, parentValue = $scope[scopeName]);
-        }
-      }
-      return lastValue = parentValue;
-    };
-    parentValueWatch.$stateful = true;
-    $scope.$parent.$watch($parse($attrs[scopeName], parentValueWatch), null, parentGet.literal);
   });
 
   // Default configs
@@ -350,22 +88,22 @@ angular.module('ngTasty.table', [
    * In the future you will have a way to change
    * these values by an isolate optional scope variable,
    * more info here https://github.com/angular/angular.js/issues/6404 */
-  if (!angular.isDefined($attrs.resource) && !angular.isDefined($attrs.resourceCallback)) {
-    throw 'AngularJS tastyTable directive: need the resource or resource-callback attribute';
+  if (!angular.isDefined($attrs.bindResource) && !angular.isDefined($attrs.bindResourceCallback)) {
+    throw 'AngularJS tastyTable directive: need the bind-resource or bind-resource-callback attribute';
   }
-  if (angular.isDefined($attrs.resource)) {
+  if (angular.isDefined($attrs.bindResource)) {
     if (!angular.isObject($scope.resource)) {
-      throw 'AngularJS tastyTable directive: the resource ('+
-        $attrs.resource + ') it\'s not an object';
+      throw 'AngularJS tastyTable directive: the bind-resource ('+
+        $attrs.bindResource + ') it\'s not an object';
     } else if (!$scope.resource.header && !$scope.resource.rows) {
-      throw 'AngularJS tastyTable directive: the resource ('+
-        $attrs.resource + ') has the property header or rows undefined';
+      throw 'AngularJS tastyTable directive: the bind-resource ('+
+        $attrs.bindResource + ') has the property header or rows undefined';
     }
   }
-  if (angular.isDefined($attrs.resourceCallback)) {
+  if (angular.isDefined($attrs.bindResourceCallback)) {
     if (!angular.isFunction($scope.resourceCallback)) {
-      throw 'AngularJS tastyTable directive: the resource-callback ('+
-        $attrs.resourceCallback + ') it\'s not a function';
+      throw 'AngularJS tastyTable directive: the bind-resource-callback ('+
+        $attrs.bindResourceCallback + ') it\'s not a function';
     }
     $scope.clientSide = false;
   }   
@@ -388,10 +126,10 @@ angular.module('ngTasty.table', [
 
   $scope.setDirectivesValues = function (resource) {
     if (!angular.isObject(resource)) {
-      throw 'AngularJS tastyTable directive: the resource '+
+      throw 'AngularJS tastyTable directive: the bind-resource '+
             'it\'s not an object';
     } else if (!resource.header && !resource.rows) {
-      throw 'AngularJS tastyTable directive: the resource '+
+      throw 'AngularJS tastyTable directive: the bind-resource '+
             'has the property header or rows undefined';
     }
     // Assuming if one header uses just one key it's based on the new pattern.
@@ -439,7 +177,7 @@ angular.module('ngTasty.table', [
         $scope.rows = $filter('orderBy')($scope.rows, listSortBy, reverse);
       }
     }
-    if ($attrs.filters) {
+    if ($attrs.bindFilters) {
       $scope.rows = $filter('filter')($scope.rows, $scope.filters);
     }
     if ($scope.paginationDirective) {
@@ -468,7 +206,7 @@ angular.module('ngTasty.table', [
       urlQuery = tastyUtil.setProperty(urlQuery, params, 'page');
       urlQuery = tastyUtil.setProperty(urlQuery, params, 'count');
     }
-    if ($attrs.filters) {
+    if ($attrs.bindFilters) {
       urlQuery = tastyUtil.joinObjects(urlQuery, filters, listKeyNotJoin);
     }
     return Object.keys(urlQuery).map(function(key) {
@@ -510,7 +248,7 @@ angular.module('ngTasty.table', [
   };
   
   // AngularJs $watch callbacks
-  if ($attrs.filters) {
+  if ($attrs.bindFilters) {
     $scope.$watch('filters', function (newValue, oldValue){
       if (newValue !== oldValue) {
         if ($scope.clientSide) {
@@ -562,21 +300,34 @@ angular.module('ngTasty.table', [
   </table>
  *
  */
-.directive('tastyThead', ["$filter", function($filter) {
+.directive('tastyThead', ["$filter", "tastyUtil", function($filter, tastyUtil) {
   return {
     restrict: 'AE',
     require: '^tastyTable',
-    scope: {
-      'notSortBy': '='
-    },
+    scope: {},
     templateUrl: 'template/table/head.html',
     link: function (scope, element, attrs, tastyTable) {
       'use strict';
-      var iconUp, iconDown;
+      var iconUp, iconDown, newScopeName, listScopeToWatch;
       // Thead it's called
       tastyTable.activate('thead');
       scope.bindOnce = tastyTable.bindOnce;
       scope.columns = [];
+
+      listScopeToWatch = ['bindNotSortBy'];
+      listScopeToWatch.forEach(function (scopeName) {
+        newScopeName = scopeName.substring(4);
+        newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
+        if (attrs[scopeName]) {
+          tastyUtil.bindTo(scopeName, scope, attrs, newScopeName);
+        } else if (attrs[newScopeName]) {
+          if (attrs[newScopeName][0] === '[') {
+            scope[newScopeName] = JSON.parse(attrs[newScopeName]);
+          } else {
+            scope[newScopeName] = attrs[newScopeName];
+          }
+        }
+      });
 
       iconUp = 'fa fa-sort-up';
       iconDown = 'fa fa-sort-down';
@@ -674,7 +425,7 @@ angular.module('ngTasty.table', [
   </div>
  *
  */
-.directive('tastyPagination', ["$filter", "$templateCache", "$http", "$compile", "$parse", "tableConfig", function($filter, $templateCache, $http, $compile, $parse, tableConfig) {
+.directive('tastyPagination', ["$filter", "$templateCache", "$http", "$compile", "tableConfig", "tastyUtil", function($filter, $templateCache, $http, $compile, tableConfig, tastyUtil) {
   return {
     restrict: 'AE',
     require: '^tastyTable',
@@ -684,41 +435,30 @@ angular.module('ngTasty.table', [
     },
     link: function (scope, element, attrs, tastyTable) {
       'use strict';
-      var getPage, setCount, setPaginationRange,
-          setPreviousRange, setRemainingRange,
-          setPaginationRanges, listScopeToWatch;
+      var getPage, setCount, setPaginationRange, setPreviousRange, 
+          setRemainingRange, setPaginationRanges, listScopeToWatch, newScopeName;
 
-
-      listScopeToWatch = ['itemsPerPage', 'listItemsPerPage'];
+      listScopeToWatch = ['bindItemsPerPage', 'bindListItemsPerPage', 'bindTemplateUrl'];
       listScopeToWatch.forEach(function (scopeName) {
-        var lastValue, parentGet, compare, parentSet, parentValueWatch;
-        if (!attrs[scopeName]) {
-          return;
-        }
-        parentGet = $parse(attrs[scopeName]);
-        if (parentGet.literal) {
-          compare = equals;
-        } else {
-          compare = function(a,b) { return a === b || (a !== a && b !== b); };
-        }
-        parentSet = parentGet.assign;
-        lastValue = scope[scopeName] = parentGet(scope.$parent);
-        parentValueWatch = function parentValueWatch(parentValue) {
-          if (!compare(parentValue, scope[scopeName])) {
-            // we are out of sync and need to copy
-            if (!compare(parentValue, lastValue)) {
-              // parent changed and it has precedence
-              $scope[scopeName] = parentValue;
-            } else {
-              // if the parent can be assigned then do so
-              parentSet(scope.$parent, parentValue = scope[scopeName]);
-            }
+        newScopeName = scopeName.substring(4);
+        newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
+        if (attrs[scopeName]) {
+          tastyUtil.bindTo(scopeName, scope, attrs, newScopeName);
+        } else if (attrs[newScopeName]) {
+          if (newScopeName === 'itemsPerPage') {
+            scope[newScopeName] = parseInt(attrs[newScopeName]);
+          } else {
+            scope[newScopeName] = JSON.parse(attrs[newScopeName]);
           }
-          return lastValue = parentValue;
-        };
-        parentValueWatch.$stateful = true;
-        scope.$parent.$watch($parse(attrs[scopeName], parentValueWatch), null, parentGet.literal);
+        }
       });
+
+      if (scope.templateUrl) {
+        $http.get(scope.templateUrl, { cache: $templateCache })
+        .success(function(templateContent) {
+          element.replaceWith($compile(templateContent)(scope));                
+        });
+      }
 
       // Default configs
       scope.itemsPerPage = scope.itemsPerPage || tableConfig.itemsPerPage;
@@ -836,7 +576,276 @@ angular.module('ngTasty.table', [
   };
 }]);
 
-angular.module('template/table/head.html', []).run(['$templateCache', function($templateCache) {
+/**
+ * @ngdoc filter
+ * @name cleanFieldName
+ *
+ * @description
+ * Calling toString will return the ...
+ *
+ * @example
+  ng-bind="key | cleanFieldName"
+ *
+ */
+angular.module('ngTasty.filter.cleanFieldName', [])
+.filter('cleanFieldName', function() {
+  return function (input) {
+    return input.replace(/[^a-zA-Z0-9-]+/g, '-');
+  };
+});
+
+/**
+ * @ngdoc filter
+ * @name filterInt
+ * @kind function
+ *
+ */
+angular.module('ngTasty.filter.filterInt', [])
+.filter('filterInt', function() {
+  return function (input) {
+    if(/^(\-|\+)?([0-9]+|Infinity)$/.test(input)) {
+      return Number(input);
+    }
+    return NaN;
+  };
+});
+
+/**
+ * @ngdoc filter
+ * @name range
+ * @kind function
+ *
+ * @description
+ * Create a list containing arithmetic progressions. The arguments must 
+ * be plain integers. If the step argument is omitted, it defaults to 1. 
+ * If the start argument is omitted, it defaults to 0.
+ *
+ * @example
+  ng-repeat="n in [] | range:1:30"
+ */
+angular.module('ngTasty.filter.range', ['ngTasty.filter.filterInt'])
+.filter('range', ["$filter", function($filter) {
+  return function(input, start, stop, step) {
+    start = $filter('filterInt')(start);
+    stop = $filter('filterInt')(stop);
+    step = $filter('filterInt')(step);
+    if (isNaN(start)) {
+      start = 0;
+    }
+    if (isNaN(stop)) {
+      stop = start;
+      start = 0;
+    }
+    if (isNaN(step)) {
+      step = 1;
+    }
+    if ((step > 0 && start >= stop) || (step < 0 && start <= stop)){
+      return [];
+    }
+    for (var i = start; step > 0 ? i < stop : i > stop; i += step){
+      input.push(i);
+    }
+    return input;
+  };
+}]);
+
+/**
+ * @ngdoc 
+ * @name 
+ *
+ */
+angular.module('ngTasty.service.bindTo', [])
+.factory('bindTo', ["$parse", function($parse) {
+  return function (scopeName, scope, attrs, newScopeName) {
+    var lastValue, parentGet, compare, parentSet, 
+    parentValueWatch, isolateScopeName;
+    if (!attrs[scopeName]) {
+      return;
+    }
+    parentGet = $parse(attrs[scopeName]);
+    if (parentGet.literal) {
+      compare = equals;
+    } else {
+      compare = function(a,b) { return a === b || (a !== a && b !== b); };
+    }
+    if (newScopeName) {
+      isolateScopeName = newScopeName;
+    } else {
+      isolateScopeName = scopeName;
+    }
+    parentSet = parentGet.assign;
+    lastValue = scope[isolateScopeName] = parentGet(scope.$parent);
+    parentValueWatch = function parentValueWatch(parentValue) {
+      if (!compare(parentValue, scope[isolateScopeName])) {
+        // we are out of sync and need to copy
+        if (!compare(parentValue, lastValue)) {
+          // parent changed and it has precedence
+          scope[isolateScopeName] = parentValue;
+        } else {
+          // if the parent can be assigned then do so
+          parentSet(scope.$parent, parentValue = scope[isolateScopeName]);
+        }
+      }
+      return lastValue = parentValue;
+    };
+    parentValueWatch.$stateful = true;
+    scope.$parent.$watch($parse(attrs[scopeName], parentValueWatch), null, parentGet.literal);
+  };
+}]);
+/**
+ * @ngdoc 
+ * @name 
+ *
+ */
+angular.module('ngTasty.service.debounce', [])
+.factory('debounce', ["$timeout", function($timeout) {
+  return function(func, wait, immediate) {
+    var timeout;
+    return function() {
+      var context = this, args = arguments;
+      $timeout.cancel(timeout);
+      timeout = $timeout(function() {
+        timeout = null;
+        func.apply(context, args);
+      }, wait);
+    };
+  };
+}]);
+
+/**
+ * @ngdoc 
+ * @name 
+ *
+ */
+angular.module('ngTasty.service.joinObjects', ['ngTasty.service.setProperty'])
+.factory('joinObjects', ["setProperty", function(setProperty) {
+  return function(objOne, objTwo, listKeyNotJoin) {
+    listKeyNotJoin = listKeyNotJoin || [];
+    for (var attrname in objTwo) {
+      if (listKeyNotJoin.indexOf(attrname) < 0) {
+        setProperty(objOne, objTwo, attrname);
+      }
+    }
+    return objOne;
+  };
+}]);
+
+/**
+ * @ngdoc 
+ * @name 
+ *
+ */
+angular.module('ngTasty.service.setProperty', [])
+.factory('setProperty', function() {
+  return function(objOne, objTwo, attrname) {
+    if (typeof objTwo[attrname] !== 'undefined' && 
+        objTwo[attrname] !== null) {
+      objOne[attrname] = objTwo[attrname];
+    }
+    return objOne;
+  };
+});
+
+/**
+ * @ngdoc 
+ * @name 
+ *
+ */
+angular.module('ngTasty.service.tastyUtil', [
+  'ngTasty.service.bindTo',
+  'ngTasty.service.debounce',
+  'ngTasty.service.setProperty',
+  'ngTasty.service.joinObjects'
+])
+.factory('tastyUtil', ["debounce", "setProperty", "joinObjects", "bindTo", function(debounce, setProperty, joinObjects, bindTo) {
+  return {
+    'bindTo': bindTo,
+    'debounce': debounce,
+    'setProperty': setProperty,
+    'joinObjects': joinObjects
+  };
+}]);
+
+angular.module('ngTasty.service.webSocket', [
+  'ngTasty.service'
+])
+.factory('WebSocket', function() {
+  
+  return function(url) {
+    var blobURL = URL.createObjectURL(new Blob(['(', function() {
+      var WSWorker = (function() {
+        var _ws;
+
+        var initialize = function(url) {
+          _ws = new WebSocket(url);
+        };
+
+        var on = function(event) {
+          _ws.onmessage = function(response) {
+            var data = JSON.parse(response.data);
+            self.postMessage(data);
+          };
+        };
+
+        var send = function(data) {
+          _ws.send(data);
+        };
+
+        return {
+          initialize: initialize,
+          on: on,
+          send: send
+        };
+
+      })();
+
+      self.addEventListener('message', function(e) {
+        switch (e.data.cmd) {
+          case 'ws_new':
+            WSWorker.initialize(e.data.url);
+            break;
+          case 'ws_on':
+            WSWorker.on(e.data.event, e.data.cb);
+            break;
+          case 'ws_send':
+            WSWorker.send(JSON.stringify(e.data.data));
+            break;
+          default:
+            console.log('Unknown command: ' + e.data.cmd);
+          }
+      });
+
+    }.toString(), ')()'], { type: 'application/javascript' }));
+
+    var _worker = new Worker(blobURL);
+    URL.revokeObjectURL(blobURL);
+
+    _worker.postMessage({ cmd: 'ws_new', url: url });
+
+    return {
+      on: function(event, cb) {
+        _worker.postMessage({ cmd: 'ws_on' });
+        _worker.addEventListener('message', function(e) {
+          if (event === 'all' || e.data.type === event) {
+            cb(e.data);
+          } 
+        });
+      },
+      send: function(data) {
+        _worker.postMessage({ cmd: 'ws_send', data: data });
+      }
+    };
+
+  };
+});
+
+(function(module) {
+try {
+  module = angular.module('ngTasty.tpls.TableHead');
+} catch (e) {
+  module = angular.module('ngTasty.tpls.TableHead', []);
+}
+module.run(['$templateCache', function($templateCache) {
   $templateCache.put('template/table/head.html',
     '<tr>\n' +
     '  <th ng-repeat="column in columns track by $index" \n' +
@@ -847,8 +856,15 @@ angular.module('template/table/head.html', []).run(['$templateCache', function($
     '  </th> \n' +
     '</tr>');
 }]);
+})();
 
-angular.module('template/table/pagination.html', []).run(['$templateCache', function($templateCache) {
+(function(module) {
+try {
+  module = angular.module('ngTasty.tpls.TablePagination');
+} catch (e) {
+  module = angular.module('ngTasty.tpls.TablePagination', []);
+}
+module.run(['$templateCache', function($templateCache) {
   $templateCache.put('template/table/pagination.html',
     '<div class="row">\n' +
     '  <div class="col-xs-3 text-left">\n' +
@@ -882,3 +898,4 @@ angular.module('template/table/pagination.html', []).run(['$templateCache', func
     '  </div>\n' +
     '</div>');
 }]);
+})();

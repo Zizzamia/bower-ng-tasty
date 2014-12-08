@@ -8,10 +8,12 @@
   </table>
  *
  */
-angular.module('ngTasty.table', [
+angular.module('ngTasty.component.table', [
   'ngTasty.filter.cleanFieldName',
   'ngTasty.filter.range',
-  'ngTasty.service.tastyUtil'
+  'ngTasty.service.tastyUtil',
+  'ngTasty.tpls.TableHead',
+  'ngTasty.tpls.TablePagination'
 ])
 .constant('tableConfig', {
   init: {
@@ -30,42 +32,20 @@ angular.module('ngTasty.table', [
   itemsPerPage: 5,
   bindOnce: true
 })
-.controller('TableController', function($scope, $attrs, $timeout, $filter, $parse, tableConfig, tastyUtil) {
+.controller('TableController', function($scope, $attrs, $timeout, $filter, tableConfig, tastyUtil) {
   'use strict';
-  var listScopeToWatch, initTable;
+  var listScopeToWatch, initTable, newScopeName;
   this.$scope = $scope;
   $scope.init = {};
   $scope.query = {};
 
-  listScopeToWatch = ['filters', 'init', 'query', 'resource', 'resourceCallback'];
+  listScopeToWatch = ['bindFilters', 'bindInit', 'bindQuery', 'bindResource', 'bindResourceCallback'];
   listScopeToWatch.forEach(function (scopeName) {
-    var lastValue, parentGet, compare, parentSet, parentValueWatch;
-    if (!$attrs[scopeName]) {
-      return;
+    newScopeName = scopeName.substring(4);
+    newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
+    if ($attrs[scopeName]) {
+      tastyUtil.bindTo(scopeName, $scope, $attrs, newScopeName);
     }
-    parentGet = $parse($attrs[scopeName]);
-    if (parentGet.literal) {
-      compare = equals;
-    } else {
-      compare = function(a,b) { return a === b || (a !== a && b !== b); };
-    }
-    parentSet = parentGet.assign;
-    lastValue = $scope[scopeName] = parentGet($scope.$parent);
-    parentValueWatch = function parentValueWatch(parentValue) {
-      if (!compare(parentValue, $scope[scopeName])) {
-        // we are out of sync and need to copy
-        if (!compare(parentValue, lastValue)) {
-          // parent changed and it has precedence
-          $scope[scopeName] = parentValue;
-        } else {
-          // if the parent can be assigned then do so
-          parentSet($scope.$parent, parentValue = $scope[scopeName]);
-        }
-      }
-      return lastValue = parentValue;
-    };
-    parentValueWatch.$stateful = true;
-    $scope.$parent.$watch($parse($attrs[scopeName], parentValueWatch), null, parentGet.literal);
   });
 
   // Default configs
@@ -99,22 +79,22 @@ angular.module('ngTasty.table', [
    * In the future you will have a way to change
    * these values by an isolate optional scope variable,
    * more info here https://github.com/angular/angular.js/issues/6404 */
-  if (!angular.isDefined($attrs.resource) && !angular.isDefined($attrs.resourceCallback)) {
-    throw 'AngularJS tastyTable directive: need the resource or resource-callback attribute';
+  if (!angular.isDefined($attrs.bindResource) && !angular.isDefined($attrs.bindResourceCallback)) {
+    throw 'AngularJS tastyTable directive: need the bind-resource or bind-resource-callback attribute';
   }
-  if (angular.isDefined($attrs.resource)) {
+  if (angular.isDefined($attrs.bindResource)) {
     if (!angular.isObject($scope.resource)) {
-      throw 'AngularJS tastyTable directive: the resource ('+
-        $attrs.resource + ') it\'s not an object';
+      throw 'AngularJS tastyTable directive: the bind-resource ('+
+        $attrs.bindResource + ') it\'s not an object';
     } else if (!$scope.resource.header && !$scope.resource.rows) {
-      throw 'AngularJS tastyTable directive: the resource ('+
-        $attrs.resource + ') has the property header or rows undefined';
+      throw 'AngularJS tastyTable directive: the bind-resource ('+
+        $attrs.bindResource + ') has the property header or rows undefined';
     }
   }
-  if (angular.isDefined($attrs.resourceCallback)) {
+  if (angular.isDefined($attrs.bindResourceCallback)) {
     if (!angular.isFunction($scope.resourceCallback)) {
-      throw 'AngularJS tastyTable directive: the resource-callback ('+
-        $attrs.resourceCallback + ') it\'s not a function';
+      throw 'AngularJS tastyTable directive: the bind-resource-callback ('+
+        $attrs.bindResourceCallback + ') it\'s not a function';
     }
     $scope.clientSide = false;
   }   
@@ -137,10 +117,10 @@ angular.module('ngTasty.table', [
 
   $scope.setDirectivesValues = function (resource) {
     if (!angular.isObject(resource)) {
-      throw 'AngularJS tastyTable directive: the resource '+
+      throw 'AngularJS tastyTable directive: the bind-resource '+
             'it\'s not an object';
     } else if (!resource.header && !resource.rows) {
-      throw 'AngularJS tastyTable directive: the resource '+
+      throw 'AngularJS tastyTable directive: the bind-resource '+
             'has the property header or rows undefined';
     }
     // Assuming if one header uses just one key it's based on the new pattern.
@@ -188,7 +168,7 @@ angular.module('ngTasty.table', [
         $scope.rows = $filter('orderBy')($scope.rows, listSortBy, reverse);
       }
     }
-    if ($attrs.filters) {
+    if ($attrs.bindFilters) {
       $scope.rows = $filter('filter')($scope.rows, $scope.filters);
     }
     if ($scope.paginationDirective) {
@@ -217,7 +197,7 @@ angular.module('ngTasty.table', [
       urlQuery = tastyUtil.setProperty(urlQuery, params, 'page');
       urlQuery = tastyUtil.setProperty(urlQuery, params, 'count');
     }
-    if ($attrs.filters) {
+    if ($attrs.bindFilters) {
       urlQuery = tastyUtil.joinObjects(urlQuery, filters, listKeyNotJoin);
     }
     return Object.keys(urlQuery).map(function(key) {
@@ -259,7 +239,7 @@ angular.module('ngTasty.table', [
   };
   
   // AngularJs $watch callbacks
-  if ($attrs.filters) {
+  if ($attrs.bindFilters) {
     $scope.$watch('filters', function (newValue, oldValue){
       if (newValue !== oldValue) {
         if ($scope.clientSide) {
@@ -311,21 +291,34 @@ angular.module('ngTasty.table', [
   </table>
  *
  */
-.directive('tastyThead', function($filter) {
+.directive('tastyThead', function($filter, tastyUtil) {
   return {
     restrict: 'AE',
     require: '^tastyTable',
-    scope: {
-      'notSortBy': '='
-    },
+    scope: {},
     templateUrl: 'template/table/head.html',
     link: function (scope, element, attrs, tastyTable) {
       'use strict';
-      var iconUp, iconDown;
+      var iconUp, iconDown, newScopeName, listScopeToWatch;
       // Thead it's called
       tastyTable.activate('thead');
       scope.bindOnce = tastyTable.bindOnce;
       scope.columns = [];
+
+      listScopeToWatch = ['bindNotSortBy'];
+      listScopeToWatch.forEach(function (scopeName) {
+        newScopeName = scopeName.substring(4);
+        newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
+        if (attrs[scopeName]) {
+          tastyUtil.bindTo(scopeName, scope, attrs, newScopeName);
+        } else if (attrs[newScopeName]) {
+          if (attrs[newScopeName][0] === '[') {
+            scope[newScopeName] = JSON.parse(attrs[newScopeName]);
+          } else {
+            scope[newScopeName] = attrs[newScopeName];
+          }
+        }
+      });
 
       iconUp = 'fa fa-sort-up';
       iconDown = 'fa fa-sort-down';
@@ -423,7 +416,7 @@ angular.module('ngTasty.table', [
   </div>
  *
  */
-.directive('tastyPagination', function($filter, $templateCache, $http, $compile, $parse, tableConfig) {
+.directive('tastyPagination', function($filter, $templateCache, $http, $compile, tableConfig, tastyUtil) {
   return {
     restrict: 'AE',
     require: '^tastyTable',
@@ -433,41 +426,30 @@ angular.module('ngTasty.table', [
     },
     link: function (scope, element, attrs, tastyTable) {
       'use strict';
-      var getPage, setCount, setPaginationRange,
-          setPreviousRange, setRemainingRange,
-          setPaginationRanges, listScopeToWatch;
+      var getPage, setCount, setPaginationRange, setPreviousRange, 
+          setRemainingRange, setPaginationRanges, listScopeToWatch, newScopeName;
 
-
-      listScopeToWatch = ['itemsPerPage', 'listItemsPerPage'];
+      listScopeToWatch = ['bindItemsPerPage', 'bindListItemsPerPage', 'bindTemplateUrl'];
       listScopeToWatch.forEach(function (scopeName) {
-        var lastValue, parentGet, compare, parentSet, parentValueWatch;
-        if (!attrs[scopeName]) {
-          return;
-        }
-        parentGet = $parse(attrs[scopeName]);
-        if (parentGet.literal) {
-          compare = equals;
-        } else {
-          compare = function(a,b) { return a === b || (a !== a && b !== b); };
-        }
-        parentSet = parentGet.assign;
-        lastValue = scope[scopeName] = parentGet(scope.$parent);
-        parentValueWatch = function parentValueWatch(parentValue) {
-          if (!compare(parentValue, scope[scopeName])) {
-            // we are out of sync and need to copy
-            if (!compare(parentValue, lastValue)) {
-              // parent changed and it has precedence
-              $scope[scopeName] = parentValue;
-            } else {
-              // if the parent can be assigned then do so
-              parentSet(scope.$parent, parentValue = scope[scopeName]);
-            }
+        newScopeName = scopeName.substring(4);
+        newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
+        if (attrs[scopeName]) {
+          tastyUtil.bindTo(scopeName, scope, attrs, newScopeName);
+        } else if (attrs[newScopeName]) {
+          if (newScopeName === 'itemsPerPage') {
+            scope[newScopeName] = parseInt(attrs[newScopeName]);
+          } else {
+            scope[newScopeName] = JSON.parse(attrs[newScopeName]);
           }
-          return lastValue = parentValue;
-        };
-        parentValueWatch.$stateful = true;
-        scope.$parent.$watch($parse(attrs[scopeName], parentValueWatch), null, parentGet.literal);
+        }
       });
+
+      if (scope.templateUrl) {
+        $http.get(scope.templateUrl, { cache: $templateCache })
+        .success(function(templateContent) {
+          element.replaceWith($compile(templateContent)(scope));                
+        });
+      }
 
       // Default configs
       scope.itemsPerPage = scope.itemsPerPage || tableConfig.itemsPerPage;
