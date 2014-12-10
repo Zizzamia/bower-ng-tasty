@@ -5,7 +5,7 @@
  * Version: 0.4.1 - 2014-12-10
  * License: MIT
  */
-angular.module("ngTasty", ["ngTasty.tpls", "ngTasty.component.table","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.websocket"]);
+angular.module("ngTasty", ["ngTasty.tpls", "ngTasty.component.table","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.webSocket"]);
 angular.module("ngTasty.tpls", ["ngTasty.tpls.table.head","ngTasty.tpls.table.pagination"]);
 /**
  * @ngdoc directive
@@ -755,22 +755,22 @@ angular.module('ngTasty.service.tastyUtil', [
   'ngTasty.service.bindTo',
   'ngTasty.service.debounce',
   'ngTasty.service.setProperty',
-  'ngTasty.service.joinObjects'
+  'ngTasty.service.joinObjects',
+  'ngTasty.service.webSocket'
 ])
-.factory('tastyUtil', ["debounce", "setProperty", "joinObjects", "bindTo", function(debounce, setProperty, joinObjects, bindTo) {
+.factory('tastyUtil', ["debounce", "setProperty", "joinObjects", "bindTo", "webSocket", function(debounce, setProperty, joinObjects, bindTo, webSocket) {
   return {
     'bindTo': bindTo,
     'debounce': debounce,
     'setProperty': setProperty,
-    'joinObjects': joinObjects
+    'joinObjects': joinObjects,
+    'webSocket': webSocket
   };
 }]);
 
-angular.module('ngTasty.service.webSocket', [
-  'ngTasty.service'
-])
-.factory('WebSocket', function() {
-  
+angular.module('ngTasty.service.webSocket', [])
+
+.factory('webSocket', function() {
   return function(url) {
     var blobURL = URL.createObjectURL(new Blob(['(', function() {
       var WSWorker = (function() {
@@ -835,7 +835,6 @@ angular.module('ngTasty.service.webSocket', [
         _worker.postMessage({ cmd: 'ws_send', data: data });
       }
     };
-
   };
 });
 
