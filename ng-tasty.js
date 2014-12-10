@@ -2,10 +2,10 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.4.0 - 2014-12-08
+ * Version: 0.4.1 - 2014-12-10
  * License: MIT
  */
-angular.module("ngTasty", ["ngTasty.component.table"]);
+angular.module("ngTasty", ["ngTasty.component.table","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.websocket"]);
 /**
  * @ngdoc directive
  * @name tastyTable
@@ -20,8 +20,8 @@ angular.module('ngTasty.component.table', [
   'ngTasty.filter.cleanFieldName',
   'ngTasty.filter.range',
   'ngTasty.service.tastyUtil',
-  'ngTasty.tpls.TableHead',
-  'ngTasty.tpls.TablePagination'
+  'ngTasty.tpls.table.head',
+  'ngTasty.tpls.table.pagination'
 ])
 .constant('tableConfig', {
   init: {
