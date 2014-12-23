@@ -2,7 +2,7 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.4.1 - 2014-12-10
+ * Version: 0.4.2 - 2014-12-22
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.tpls", "ngTasty.component.table","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.webSocket"]);
@@ -41,10 +41,13 @@ angular.module('ngTasty.component.table', [
   itemsPerPage: 5,
   bindOnce: true
 })
-.controller('TableController', ["$scope", "$attrs", "$timeout", "$filter", "tableConfig", "tastyUtil", function($scope, $attrs, $timeout, $filter, tableConfig, tastyUtil) {
+.controller('TableController', ["$scope", "$attrs", "$filter", "tableConfig", "tastyUtil", function($scope, $attrs, $filter, tableConfig, tastyUtil) {
   'use strict';
-  var listScopeToWatch, initTable, newScopeName;
+  var listScopeToWatch, initTable, newScopeName, initStatus,
+      updateClientSideResource, updateServerSideResource, setDirectivesValues,
+      buildClientResource, buildUrl;
   this.$scope = $scope;
+  initStatus = {};
   $scope.init = {};
   $scope.query = {};
 
@@ -110,6 +113,8 @@ angular.module('ngTasty.component.table', [
 
   // In TableController, by using `this` we build an API 
   // for other directives to talk to this one.
+  this.start = false;
+
   this.activate = function(directiveName) {
     $scope[directiveName + 'Directive'] = true;
     $scope.params[directiveName] = true;
@@ -122,9 +127,45 @@ angular.module('ngTasty.component.table', [
     }
   };
 
+  this.initTable = function (keyDirective) {
+    initStatus[keyDirective] = true;
+    if (!$scope.theadDirective && !$scope.paginationDirective) {
+      this.start = true;
+    } else if ($scope.theadDirective && $scope.paginationDirective) {
+      if (initStatus.thead && initStatus.pagination){
+        this.start = true;
+      }
+    } else if ($scope.theadDirective && !$scope.paginationDirective) {
+      if (initStatus.thead){
+        this.start = true;
+      }
+    } else if (!$scope.theadDirective && $scope.paginationDirective) {
+      if (initStatus.pagination){
+        this.start = true;
+      }
+    }
+
+    if (this.start) {
+      if ($scope.clientSide) {
+        $scope.params.sortBy = $scope.resource.sortBy || $scope.init.sortBy;
+        $scope.params.sortOrder = $scope.resource.sortOrder || $scope.init.sortOrder;
+        $scope.params.page = $scope.init.page;
+        if ($scope.resource.pagination) {
+          $scope.params.page = $scope.resource.pagination.page || $scope.init.page;
+        }
+        $scope.$evalAsync(updateClientSideResource);
+      } else {
+        $scope.params.sortBy = $scope.init.sortBy;
+        $scope.params.sortOrder = $scope.init.sortOrder;
+        $scope.params.page = $scope.init.page;
+        $scope.$evalAsync(updateServerSideResource);
+      }
+    }
+  };
+
   this.bindOnce = tableConfig.bindOnce;
 
-  $scope.setDirectivesValues = function (resource) {
+  setDirectivesValues = function (resource) {
     if (!angular.isObject(resource)) {
       throw 'AngularJS tastyTable directive: the bind-resource '+
             'it\'s not an object';
@@ -134,7 +175,7 @@ angular.module('ngTasty.component.table', [
     }
     // Assuming if one header uses just one key it's based on the new pattern.
     // [feature request] simplified header for resources #37 by @WebReflection
-    if (Object.keys(resource.header[0]).length === 1) {
+    if (resource.header.length && Object.keys(resource.header[0]).length === 1) {
       resource.header = resource.header.map(function (header) {
         var key = Object.keys(header)[0];
         return {
@@ -153,17 +194,28 @@ angular.module('ngTasty.component.table', [
       $scope.header.sortOrder = $scope.header.sortOrder || resource.sortOrder;
     }
     $scope.rows = resource.rows;
-    if ($scope.paginationDirective && resource.pagination) {
-      $scope.pagination.count = resource.pagination.count;
-      $scope.pagination.page = resource.pagination.page;
-      $scope.pagination.pages = resource.pagination.pages;
-      $scope.pagination.size = resource.pagination.size;
+    if ($scope.paginationDirective) {
+      $scope.pagination.page = $scope.params.page;
+      $scope.pagination.count = $scope.params.count;
+      $scope.pagination.size = $scope.rows.length;
+      if (resource.pagination) {
+        if (resource.pagination.count) {
+          $scope.pagination.count = resource.pagination.count;
+        }
+        if (resource.pagination.page) {
+          $scope.pagination.page = resource.pagination.page;
+        }
+        if (resource.pagination.size) {
+          $scope.pagination.size = resource.pagination.size;
+        }
+      }
+      $scope.pagination.pages = Math.ceil($scope.pagination.size / $scope.pagination.count);
     }
   };
 
-  $scope.buildClientResource = function() {
+  buildClientResource = function(updateFrom) {
     var fromRow, toRow, rowToShow, reverse, listSortBy;
-    if ($scope.theadDirective) {
+    if ($scope.theadDirective && $scope.header.columns.length) {
       reverse = $scope.header.sortOrder === 'asc' ? false : true;
       listSortBy = [function(item) {
         return item[$scope.header.sortBy];
@@ -181,7 +233,11 @@ angular.module('ngTasty.component.table', [
       $scope.rows = $filter('filter')($scope.rows, $scope.filters);
     }
     if ($scope.paginationDirective) {
-      $scope.pagination.page = $scope.params.page;
+      if (updateFrom === 'filters') {
+        $scope.pagination.page = 1;
+      } else {
+        $scope.pagination.page = $scope.params.page;
+      }
       $scope.pagination.count = $scope.params.count;
       $scope.pagination.size = $scope.rows.length;
       $scope.pagination.pages = Math.ceil($scope.rows.length / $scope.pagination.count);
@@ -194,7 +250,7 @@ angular.module('ngTasty.component.table', [
     }
   };
 
-  $scope.buildUrl = function(params, filters) {
+  buildUrl = function(params, filters) {
     var urlQuery, value, url, listKeyNotJoin;
     urlQuery = {};
     listKeyNotJoin = ['sortBy', 'sortOrder', 'page', 'count'];
@@ -218,74 +274,65 @@ angular.module('ngTasty.component.table', [
     }).join('&');
   };
 
-  $scope.updateClientSideResource = tastyUtil.debounce(function() {
-    $scope.setDirectivesValues($scope.resource);
-    $scope.buildClientResource();
-  }, 60);
+  updateClientSideResource = function (updateFrom) {
+    setDirectivesValues($scope.resource);
+    buildClientResource(updateFrom);
+  };
 
-  $scope.updateServerSideResource = tastyUtil.debounce(function() {
-    $scope.url = $scope.buildUrl($scope.params, $scope.filters);
-    $scope.resourceCallback($scope.url, $scope.params).then(function (resource) {
-      $scope.setDirectivesValues(resource);
+  updateServerSideResource = function () {
+    $scope.url = buildUrl($scope.params, $scope.filters);
+    $scope.resourceCallback($scope.url, angular.copy($scope.params)).then(function (resource) {
+      setDirectivesValues(resource);
     });
-  }, 60);
-
-  initTable = function () {
-    if ($scope.clientSide) {
-      $scope.params.sortBy = $scope.resource.sortBy || $scope.init.sortBy;
-      $scope.params.sortOrder = $scope.resource.sortOrder || $scope.init.sortOrder;
-      $scope.params.page = $scope.init.page;
-      if ($scope.resource.pagination) {
-        $scope.params.page = $scope.resource.pagination.page || $scope.init.page;
-      }
-      $scope.updateClientSideResource();
-    } else {
-      $scope.params.sortBy = $scope.init.sortBy;
-      $scope.params.sortOrder = $scope.init.sortOrder;
-      $scope.params.page = $scope.init.page;
-      $scope.updateServerSideResource();
-    }
   };
   
   // AngularJs $watch callbacks
   if ($attrs.bindFilters) {
-    $scope.$watch('filters', function (newValue, oldValue){
+    $scope.$watch('filters', function watchFilters (newValue, oldValue){
       if (newValue !== oldValue) {
         if ($scope.clientSide) {
-          $scope.updateClientSideResource();
+          $scope.$evalAsync(updateClientSideResource('filters'));
         } else {
-          $scope.updateServerSideResource();
+          $scope.$evalAsync(updateServerSideResource);
         }
       }
     }, true);
   }
-  $scope.$watchCollection('params', function (newValue, oldValue){
+  $scope.$watchCollection('params', function watchParams (newValue, oldValue){
     if (newValue !== oldValue) {
       if ($scope.clientSide) {
-        $scope.updateClientSideResource();
+        $scope.$evalAsync(updateClientSideResource('params'));
       } else {
-        $scope.updateServerSideResource();
+        $scope.$evalAsync(updateServerSideResource);
       }
     }
   });
   if ($scope.resource) {
-    $scope.$watch('resource', function (newValue, oldValue){
+    $scope.$watch('resource', function watchResource (newValue, oldValue){
       if (newValue !== oldValue) {
         $scope.params.sortBy = newValue.sortBy;
         $scope.params.sortOrder = newValue.sortOrder;
-        $scope.updateClientSideResource();
+        $scope.$evalAsync(updateClientSideResource('resource'));
       }
     }, true);
   }
-
-  // Init table
-  initTable();
 }])
 .directive('tastyTable', function(){
   return {
     restrict: 'A',
     scope: true,
-    controller: 'TableController'
+    controller: 'TableController',
+    link: function (scope, element, attrs, tastyTable) {
+      if (element.find('tasty-thead').length ||
+          element[0].querySelector('[tasty-thead]')) {
+        tastyTable.activate('thead');
+      }
+      if (element.find('tasty-pagination').length ||
+          element[0].querySelector('[tasty-pagination]')) {
+        tastyTable.activate('pagination');
+      }
+      tastyTable.initTable();
+    }
   };
 })
 
@@ -309,8 +356,6 @@ angular.module('ngTasty.component.table', [
     link: function (scope, element, attrs, tastyTable) {
       'use strict';
       var iconUp, iconDown, newScopeName, listScopeToWatch;
-      // Thead it's called
-      tastyTable.activate('thead');
       scope.bindOnce = tastyTable.bindOnce;
       scope.columns = [];
 
@@ -374,6 +419,10 @@ angular.module('ngTasty.component.table', [
             scope.header.sortBy[0] !== '-') {
           scope.header.sortBy = '-' + scope.header.sortBy;
         }
+        if (!tastyTable.start) {
+          // Thead it's called
+          tastyTable.initTable('thead');
+        }
       };
 
       scope.sortBy = function (column) {
@@ -402,8 +451,8 @@ angular.module('ngTasty.component.table', [
         return listClassToShow;
       };
 
-      tastyTable.$scope.$watchCollection('header', function (newValue, oldValue){
-        if (newValue && (newValue !== oldValue)) {
+      tastyTable.$scope.$watchCollection('header', function watchHeader (newValue, oldValue){
+        if (newValue  && ((newValue !== oldValue) || !tastyTable.start)) {
           scope.header = newValue;
           scope.setColumns();
         }
@@ -463,9 +512,6 @@ angular.module('ngTasty.component.table', [
       // Default configs
       scope.itemsPerPage = scope.itemsPerPage || tableConfig.itemsPerPage;
       scope.listItemsPerPage = scope.listItemsPerPage || tableConfig.listItemsPerPage;
-
-      // Pagination it's called
-      tastyTable.activate('pagination');
 
       // Internal variable
       scope.pagination = {};
@@ -540,6 +586,11 @@ angular.module('ngTasty.component.table', [
         }
 
         scope.rangePage = $filter('range')([], scope.pagMinRange, scope.pagMaxRange);
+
+        if (!tastyTable.start) {
+          // Pagination it's called
+          tastyTable.initTable('pagination');
+        }
       };
 
       scope.classPaginationCount = function (count) {
@@ -563,8 +614,8 @@ angular.module('ngTasty.component.table', [
         'remaining': setRemainingRange
       };
 
-      tastyTable.$scope.$watchCollection('pagination', function (newValue, oldValue){
-        if (newValue && (newValue !== oldValue)) {
+      tastyTable.$scope.$watchCollection('pagination', function watchPagination (newValue, oldValue){
+        if (newValue  && ((newValue !== oldValue) || !tastyTable.start)) {
           scope.pagination = newValue;
           setPaginationRange();
         }
@@ -699,12 +750,12 @@ angular.module('ngTasty.service.bindTo', [])
  */
 angular.module('ngTasty.service.debounce', [])
 .factory('debounce', ["$timeout", function($timeout) {
-  return function(func, wait, immediate) {
+  return function (func, wait, immediate) {
     var timeout;
-    return function() {
+    return function debounce () {
       var context = this, args = arguments;
       $timeout.cancel(timeout);
-      timeout = $timeout(function() {
+      timeout = $timeout(function debounceTimeout () {
         timeout = null;
         func.apply(context, args);
       }, wait);
