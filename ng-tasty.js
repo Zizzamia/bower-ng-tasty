@@ -2,7 +2,7 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.4.2 - 2014-12-22
+ * Version: 0.4.3 - 2014-12-25
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.component.table","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.webSocket"]);
@@ -70,6 +70,18 @@ angular.module('ngTasty.component.table', [
   $scope.init.sortOrder = $scope.init.sortOrder || tableConfig.init.sortOrder;
 
   // Defualt variables
+  var listImmutableKey =[
+    'filters',
+    'init',
+    'query',
+    'rows',
+    'header',
+    'pagination',
+    'params',
+    'sortOrder',
+    'sortBy',
+    'url'
+  ];
   $scope.clientSide = true;
   $scope.url = '';
   $scope.header = {
@@ -172,6 +184,11 @@ angular.module('ngTasty.component.table', [
       throw 'AngularJS tastyTable directive: the bind-resource '+
             'has the property header or rows undefined';
     }
+    Object.keys(resource).forEach(function(key) {
+      if (listImmutableKey.indexOf(key) < 0) {
+        $scope[key] = resource[key];
+      }
+    });
     // Assuming if one header uses just one key it's based on the new pattern.
     // [feature request] simplified header for resources #37 by @WebReflection
     if (resource.header.length && Object.keys(resource.header[0]).length === 1) {
