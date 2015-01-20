@@ -2,10 +2,10 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.4.4 - 2014-12-27
+ * Version: 0.4.5 - 2015-01-19
  * License: MIT
  */
-angular.module("ngTasty", ["ngTasty.component.table","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket"]);
+angular.module("ngTasty", ["ngTasty.component.table","ngTasty.filter.camelize","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.filter.slugify","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket"]);
 /**
  * @ngdoc directive
  * @name tastyTable
@@ -42,7 +42,8 @@ angular.module('ngTasty.component.table', [
   bootstrapIcon: false,
   templateUrl: 'template/table/pagination.html',
   listItemsPerPage: [5, 25, 50, 100],
-  itemsPerPage: 5
+  itemsPerPage: 5,
+  watchResource: 'reference'
 })
 .controller('TableController', ["$scope", "$attrs", "$filter", "tableConfig", "tastyUtil", function($scope, $attrs, $filter, tableConfig, tastyUtil) {
   'use strict';
@@ -53,9 +54,12 @@ angular.module('ngTasty.component.table', [
   initStatus = {};
   $scope.init = {};
   $scope.query = {};
+  $scope.logs = {
+    'buildClientResourceCount': 0
+  };
 
   listScopeToWatch = ['bindFilters', 'bindInit', 'bindQuery', 'bindResource', 
-  'bindResourceCallback'];
+  'bindResourceCallback', 'bindWatchResource'];
   listScopeToWatch.forEach(function (scopeName) {
     newScopeName = scopeName.substring(4);
     newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
@@ -73,6 +77,7 @@ angular.module('ngTasty.component.table', [
   $scope.init.page = $scope.init.page || tableConfig.init.page;
   $scope.init.sortBy = $scope.init.sortBy || tableConfig.init.sortBy;
   $scope.init.sortOrder = $scope.init.sortOrder || tableConfig.init.sortOrder;
+  $scope.watchResource = $scope.watchResource || tableConfig.watchResource;
 
   // Defualt variables
   var listImmutableKey =[
@@ -113,7 +118,7 @@ angular.module('ngTasty.component.table', [
   if (angular.isDefined($attrs.bindResource)) {
     if (!angular.isObject($scope.resource)) {
       throw 'AngularJS tastyTable directive: the bind-resource ('+
-        $attrs.bindResource + ') it\'s not an object';
+        $attrs.bindResource + ') is not an object';
     } else if (!$scope.resource.header && !$scope.resource.rows) {
       throw 'AngularJS tastyTable directive: the bind-resource ('+
         $attrs.bindResource + ') has the property header or rows undefined';
@@ -122,7 +127,7 @@ angular.module('ngTasty.component.table', [
   if (angular.isDefined($attrs.bindResourceCallback)) {
     if (!angular.isFunction($scope.resourceCallback)) {
       throw 'AngularJS tastyTable directive: the bind-resource-callback ('+
-        $attrs.bindResourceCallback + ') it\'s not a function';
+        $attrs.bindResourceCallback + ') is not a function';
     }
     $scope.clientSide = false;
   }   
@@ -145,17 +150,17 @@ angular.module('ngTasty.component.table', [
 
   this.initTable = function (keyDirective) {
     initStatus[keyDirective] = true;
-    if (!$scope.theadDirective && !$scope.paginationDirective) {
+    if (!$scope.theadDirective && !$scope.paginationDirective) { // None of them
       this.start = true;
-    } else if ($scope.theadDirective && $scope.paginationDirective) {
+    } else if ($scope.theadDirective && $scope.paginationDirective) { // Both directives
       if (initStatus.thead && initStatus.pagination){
         this.start = true;
       }
-    } else if ($scope.theadDirective && !$scope.paginationDirective) {
+    } else if ($scope.theadDirective && !$scope.paginationDirective) { // Only Thead directive
       if (initStatus.thead){
         this.start = true;
       }
-    } else if (!$scope.theadDirective && $scope.paginationDirective) {
+    } else if (!$scope.theadDirective && $scope.paginationDirective) { // Only Pagination directive
       if (initStatus.pagination){
         this.start = true;
       }
@@ -182,11 +187,10 @@ angular.module('ngTasty.component.table', [
   this.bindOnce = tableConfig.bindOnce;
 
   setDirectivesValues = function (resource) {
-    if (!angular.isObject(resource)) {
-      throw 'AngularJS tastyTable directive: the bind-resource '+
-            'it\'s not an object';
+    if (!$scope.resource && !angular.isObject(resource)) {
+      throw 'AngularJS tastyTable directive: the resource response is not an object';
     } else if (!resource.header && !resource.rows) {
-      throw 'AngularJS tastyTable directive: the bind-resource '+
+      throw 'AngularJS tastyTable directive: the resource response object '+
             'has the property header or rows undefined';
     }
     Object.keys(resource).forEach(function(key) {
@@ -236,6 +240,7 @@ angular.module('ngTasty.component.table', [
 
   buildClientResource = function(updateFrom) {
     var fromRow, toRow, rowToShow, reverse, listSortBy;
+    $scope.logs.buildClientResourceCount += 1;
     if ($scope.theadDirective && $scope.header.columns.length) {
       reverse = $scope.header.sortOrder === 'asc' ? false : true;
       listSortBy = [function(item) {
@@ -329,13 +334,38 @@ angular.module('ngTasty.component.table', [
     }
   });
   if ($scope.resource) {
-    $scope.$watch('resource', function watchResource (newValue, oldValue){
+    var watchResource = function (newValue, oldValue){
       if (newValue !== oldValue) {
         $scope.params.sortBy = newValue.sortBy;
         $scope.params.sortOrder = newValue.sortOrder;
         $scope.$evalAsync(updateClientSideResource('resource'));
+        if (!$scope.resource.reload) {
+          $scope.resource.reload = function () {
+            $scope.$evalAsync(updateClientSideResource('resource'));
+          };
+        }
       }
-    }, true);
+    };
+    if ($scope.watchResource === 'reference') {
+      $scope.$watch('resource', watchResource);
+    } else if ($scope.watchResource === 'collection') {
+      $scope.$watchCollection('resource.header', watchResource);
+      $scope.$watchCollection('resource.rows', watchResource);
+      $scope.$watchGroup(['sortBy', 
+        'sortOrder', 
+        'pagination.count',
+        'pagination.page',
+        'pagination.pages',
+        'pagination.size'], watchResource);
+    } else if ($scope.watchResource === 'equality') {
+      $scope.$watch('resource', function (newValue, oldValue){
+        if (newValue !== oldValue) {
+          $scope.params.sortBy = newValue.sortBy;
+          $scope.params.sortOrder = newValue.sortOrder;
+          $scope.$evalAsync(updateClientSideResource('resource'));
+        }
+      }, true);
+    }
   }
 }])
 .directive('tastyTable', function(){
@@ -399,10 +429,9 @@ angular.module('ngTasty.component.table', [
       });
 
       scope.setColumns = function () {
-        var lenHeader, width, i, active, sortable, sort, 
+        var width, i, active, sortable, sort, 
         isSorted, isSortedCaret;
         scope.columns = [];
-        lenHeader = scope.header.columns.length;
         scope.header.columns.forEach(function (column, index) {
           column.style = column.style || {};
           sortable = true;
@@ -663,7 +692,40 @@ angular.module('ngTasty.component.table', [
 
 /**
  * @ngdoc filter
+ * @name filterCamelize
+ * @function
+ *
+ */
+angular.module('ngTasty.filter.camelize', [])
+.filter('camelize', function() {
+  var CAMELIZE_REGEX = /(?:^|[-_ ])(\w)/g;
+  
+  return function (input, first) {
+    var isString = typeof input === 'string',
+      first = typeof first === 'undefined' ? false : !!first;
+    
+    if(typeof input === 'undefined' || 
+       input === null || 
+       (!isString && isNaN(input)) ) {
+      return '';
+    }
+
+    if(!isString){
+      return '' + input;
+    }
+    
+    return input.trim() //remove trailing spaces
+      .replace(/ +(?= )/g,'') //remove multiple WS
+    	.replace(CAMELIZE_REGEX, function (_, character, pos) { //actual conversion
+    		return character && (first || pos > 0) ? character.toUpperCase () : character;
+    	});
+  };
+});
+
+/**
+ * @ngdoc filter
  * @name cleanFieldName
+ * @function
  *
  * @description
  * Calling toString will return the ...
@@ -682,7 +744,7 @@ angular.module('ngTasty.filter.cleanFieldName', [])
 /**
  * @ngdoc filter
  * @name filterInt
- * @kind function
+ * @function
  *
  */
 angular.module('ngTasty.filter.filterInt', [])
@@ -698,7 +760,7 @@ angular.module('ngTasty.filter.filterInt', [])
 /**
  * @ngdoc filter
  * @name range
- * @kind function
+ * @function
  *
  * @description
  * Create a list containing arithmetic progressions. The arguments must 
@@ -734,6 +796,58 @@ angular.module('ngTasty.filter.range', ['ngTasty.filter.filterInt'])
   };
 }]);
 
+/**
+ * @author https://github.com/bogdan-alexandrescu/ - @balx
+ * @ngdoc filter
+ * @name ngTasty.filter.slugify
+ * @function
+ *
+ * @description
+ * Transform text into an ascii slug by replacing whitespaces, accentuated, 
+ * and special characters with the coresponding latin character or completely 
+ * removing them when no latin equivalent is found. This can be used safely to 
+ * generate valid URLs.
+ */
+angular.module('ngTasty.filter.slugify', [])
+.filter('slugify', function () {
+
+  var makeString = function (object) {
+    if (object == null) {
+      return '';
+    }
+    return '' + object;
+  };
+
+  var defaultToWhiteSpace = function (characters) {
+    if (characters == null) {
+      return '\\s';
+    } else if (characters.source) {
+      return characters.source;
+    } else {
+      return '[' + characters.replace(/([.*+?^=!:${}()|[\]\/\\])/g, '\\$1') + ']';
+    }
+  };
+
+  var from  = "ąàáäâãåæăćčĉęèéëêĝĥìíïîĵłľńňòóöőôõðøśșšŝťțŭùúüűûñÿýçżźž",
+      to    = "aaaaaaaaaccceeeeeghiiiijllnnoooooooossssttuuuuuunyyczzz",
+      regex = new RegExp(defaultToWhiteSpace(from), 'g');
+
+  return function (str) {
+    str = makeString(str)
+    .toString() //make sure is a string
+    .toLowerCase()
+    .replace(regex, function (c){
+      var index = from.indexOf(c);
+      return to.charAt(index) || '-';
+    }) //normalize some foreign characters
+    .replace(/[^\w\-\s]+/g, '') //remove unwanted characters
+    .trim() //trim spaces
+    .replace(/\s+/g, '-') //replace any space with a dash
+    .replace(/\-\-+/g, '-'); //remove duplicate dashes
+    return str;
+  };
+});
+  
 /**
  * @ngdoc service
  * @name ngTasty.service.bindTo
@@ -786,16 +900,24 @@ angular.module('ngTasty.service.bindTo', [])
  *
  */
 angular.module('ngTasty.service.debounce', [])
-.factory('debounce', ["$timeout", function($timeout) {
+.factory('debounce', ["$timeout", function ($timeout) {
   return function (func, wait, immediate) {
-    var timeout;
-    return function debounce () {
-      var context = this, args = arguments;
-      $timeout.cancel(timeout);
-      timeout = $timeout(function debounceTimeout () {
-        timeout = null;
+    var args, context, debounceTimeout, timeout;
+    var debounceTimeout = function() {
+      timeout = null;
+      if (!immediate) {
         func.apply(context, args);
-      }, wait);
+      }
+    };
+    return function debounce () {
+      context = this;
+      args = arguments;
+      var callNow = immediate && !timeout;
+      $timeout.cancel(timeout);
+      timeout = $timeout(debounceTimeout, wait);
+      if (callNow) {
+        func.apply(context, args);
+      }
     };
   };
 }]);
@@ -874,14 +996,14 @@ angular.module('ngTasty.service.throttle', [])
   return function (fn, threshhold, scope) {
     threshhold || (threshhold = 250);
     var last, promise;
-    return function () {
+    return function throttle () {
       var context = scope || this;
       var now = +new Date,
           args = arguments;
       if (last && now < last + threshhold) {
         // hold on to it
         $timeout.cancel(promise);
-        promise = $timeout(function () {
+        promise = $timeout(function throttleTimeout () {
           last = now;
           fn.apply(context, args);
         }, threshhold);
@@ -903,21 +1025,48 @@ angular.module('ngTasty.service.throttle', [])
 angular.module('ngTasty.service.webSocket', [])
 .factory('webSocket', function() {
   return function(url) {
+    /**
+     * Creates a String[1] representing a binary blob[2] function 
+     * containing the WebSocket Factory API.
+     *
+     * [1]: https://developer.mozilla.org/en-US/docs/Web/API/URL.createObjectURL
+     * [2]: https://developer.mozilla.org/en-US/docs/Web/API/Blob
+     * 
+     * @return {string}   String containing the encoded script
+     */
     var blobURL = URL.createObjectURL(new Blob(['(', function() {
       var WSWorker = (function() {
         var _ws;
 
+        /**
+         * Initialize a new WebSocket using
+         * the provided URL parameters.
+         * 
+         * @param  {string} url The WebSocket URL
+         */
         var initialize = function(url) {
           _ws = new WebSocket(url);
         };
 
-        var on = function(event) {
+        /**
+         * Listens for any message coming from the WebSocket
+         * and send its content to the main JS thread using postMessage[1].
+         *
+         * [1]: https://developer.mozilla.org/en-US/docs/Web/API/Worker.postMessage
+         * 
+         */
+        var on = function() {
           _ws.onmessage = function(response) {
             var data = JSON.parse(response.data);
             self.postMessage(data);
           };
         };
 
+        /**
+         * Sends data to the WebSocket.
+         * 
+         * @param  {string} data
+         */
         var send = function(data) {
           _ws.send(data);
         };
@@ -930,13 +1079,25 @@ angular.module('ngTasty.service.webSocket', [])
 
       })();
 
+      /**
+       * Listens for incoming messages from the main
+       * JavaScript Thread.
+       *
+       * The commands allowed are:
+       *
+       * ws_new  ~> Calls initialize on the Web Socket Worker
+       * ws_on   ~> Register the supplied callback
+       * ws_send ~> Sends a message to the underlying WebSocket
+       *            encoding it as a string (JSON.stringify)
+       *            
+       */
       self.addEventListener('message', function(e) {
         switch (e.data.cmd) {
           case 'ws_new':
             WSWorker.initialize(e.data.url);
             break;
           case 'ws_on':
-            WSWorker.on(e.data.event, e.data.cb);
+            WSWorker.on();
             break;
           case 'ws_send':
             WSWorker.send(JSON.stringify(e.data.data));
@@ -947,13 +1108,42 @@ angular.module('ngTasty.service.webSocket', [])
       });
 
     }.toString(), ')()'], { type: 'application/javascript' }));
+    
 
+    // Create a new WebSocket Worker, revoke the URL since
+    // it's not useful anymore.
     var _worker = new Worker(blobURL);
     URL.revokeObjectURL(blobURL);
 
+    // Tell the WebSocket Worker to init a new WebSocket
     _worker.postMessage({ cmd: 'ws_new', url: url });
 
+
     return {
+      /**
+       * Registers a callback to a specific Worker event listener.
+       * There are two different events:
+       *
+       * - 'all' ~> subscribes to all websocket messages
+       * - 'type'~> subscribes to all websocket messages containing
+       *            a field named 'type'.
+       *
+       * For example, WebSockets Server events like this one:
+       *
+       * {
+       *   'type': 'tweet',
+       *   'data': ...
+       * }
+       *
+       * can be handled in the following way:
+       *
+       *  ws.on('twitter', function(data) {
+       *      ...
+       *  });
+       *  
+       * @param  {string}   event The event name
+       * @param  {Function} cb    Callback with output data (first param)
+       */
       on: function(event, cb) {
         _worker.postMessage({ cmd: 'ws_on' });
         _worker.addEventListener('message', function(e) {
@@ -962,6 +1152,11 @@ angular.module('ngTasty.service.webSocket', [])
           } 
         });
       },
+      /**
+       * Sends data to the WebSocket.
+       * 
+       * @param  {Any} data
+       */
       send: function(data) {
         _worker.postMessage({ cmd: 'ws_send', data: data });
       }

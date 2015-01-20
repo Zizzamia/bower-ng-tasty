@@ -1,12 +1,12 @@
 {
   "name": "ng-tasty",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "homepage": "https://github.com/Zizzamia/ng-tasty",
   "authors": [
-    "@zizzamia",
-    "@proudlygeek"
+    { "name" : "Leonardo Zizzamia", "homepage" : "https://twitter.com/Zizzamia" }
   ],
   "main": "./ng-tasty.js",
   "dependencies": {
+    "angular": "^1.3.0"
   }
 }

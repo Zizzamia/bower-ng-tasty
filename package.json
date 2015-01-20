@@ -1,6 +1,6 @@
 {
   "name": "ng-tasty",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "A lightweight, flexible, and tasty collection of reusable UI components for AngularJS.",
   "main": "index.js",
   "repository": {
@@ -12,9 +12,13 @@
     "angularjs",
     "tasty",
     "components",
-    "table"
+    "table",
+    "throttle",
+    "webSocket",
+    "slugify",
+    "camelize"
   ],
-  "author": "@zizzamia",
+  "author": { "name" : "Leonardo Zizzamia", "url" : "https://github.com/Zizzamia" },
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/Zizzamia/ng-tasty/issues"
