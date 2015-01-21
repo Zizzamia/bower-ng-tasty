@@ -2,10 +2,10 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.4.5 - 2015-01-19
+ * Version: 0.4.6 - 2015-01-20
  * License: MIT
  */
-angular.module("ngTasty", ["ngTasty.component.table","ngTasty.filter.camelize","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.filter.slugify","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket"]);
+angular.module("ngTasty", ["ngTasty.filter.camelize","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.filter.slugify","ngTasty.component.table","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket"]);
 /**
  * @ngdoc directive
  * @name tastyTable
@@ -560,11 +560,15 @@ angular.module('ngTasty.component.table', [
           if (newScopeName === 'itemsPerPage') {
             scope[newScopeName] = parseInt(attrs[newScopeName]);
           } else {
-            scope[newScopeName] = JSON.parse(attrs[newScopeName]);
+            try {
+              scope[newScopeName] = JSON.parse(attrs[newScopeName]);
+            } catch (err) {
+              scope[newScopeName] = attrs[newScopeName];
+            }
           }
         }
       });
-
+      
       if (scope.templateUrl) {
         $http.get(scope.templateUrl, { cache: $templateCache })
         .success(function(templateContent) {
