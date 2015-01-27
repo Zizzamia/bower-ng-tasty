@@ -32,6 +32,7 @@ angular.module('ngTasty.component.table', [
   iconUp: 'fa fa-sort-up',
   iconDown: 'fa fa-sort-down',
   bootstrapIcon: false,
+  templateHeadUrl: 'template/table/head.html',
   templateUrl: 'template/table/pagination.html',
   listItemsPerPage: [5, 25, 50, 100],
   itemsPerPage: 5,
@@ -41,9 +42,11 @@ angular.module('ngTasty.component.table', [
   'use strict';
   var listScopeToWatch, initTable, newScopeName, initStatus,
       updateClientSideResource, updateServerSideResource, setDirectivesValues,
-      buildClientResource, buildUrl;
+      buildClientResource, buildUrl, paramsInitialCycle, initNow;
   this.$scope = $scope;
   initStatus = {};
+  initNow = true;
+  paramsInitialCycle = true;
   $scope.init = {};
   $scope.query = {};
   $scope.logs = {
@@ -51,7 +54,7 @@ angular.module('ngTasty.component.table', [
   };
 
   listScopeToWatch = ['bindFilters', 'bindInit', 'bindQuery', 'bindResource', 
-  'bindResourceCallback', 'bindWatchResource'];
+  'bindResourceCallback', 'bindWatchResource', 'bindReload'];
   listScopeToWatch.forEach(function (scopeName) {
     newScopeName = scopeName.substring(4);
     newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
@@ -65,6 +68,11 @@ angular.module('ngTasty.component.table', [
   $scope.query.count = $scope.query.count || tableConfig.query.count;
   $scope.query.sortBy = $scope.query.sortBy || tableConfig.query.sortBy;
   $scope.query.sortOrder = $scope.query.sortOrder || tableConfig.query.sortOrder;
+
+  // Set init configs
+  if ($scope.reload) {
+    initNow = false;
+  }
   $scope.init.count = $scope.init.count || tableConfig.init.count;
   $scope.init.page = $scope.init.page || tableConfig.init.page;
   $scope.init.sortBy = $scope.init.sortBy || tableConfig.init.sortBy;
@@ -166,12 +174,16 @@ angular.module('ngTasty.component.table', [
         if ($scope.resource.pagination) {
           $scope.params.page = $scope.resource.pagination.page || $scope.init.page;
         }
-        $scope.$evalAsync(updateClientSideResource);
+        if (initNow) {
+          $scope.$evalAsync(updateClientSideResource);
+        }
       } else {
         $scope.params.sortBy = $scope.init.sortBy;
         $scope.params.sortOrder = $scope.init.sortOrder;
         $scope.params.page = $scope.init.page;
-        $scope.$evalAsync(updateServerSideResource);
+        if (initNow) {
+          $scope.$evalAsync(updateServerSideResource);
+        }
       }
     }
   };
@@ -297,11 +309,21 @@ angular.module('ngTasty.component.table', [
     buildClientResource(updateFrom);
   };
 
-  updateServerSideResource = function () {
+  updateServerSideResource = function (updateFrom) {
     $scope.url = buildUrl($scope.params, $scope.filters);
-    $scope.resourceCallback($scope.url, angular.copy($scope.params)).then(function (resource) {
-      setDirectivesValues(resource);
-    });
+    if ($scope.reload && updateFrom === 'filters') {
+      $scope.reload = function () {
+        $scope.resourceCallback($scope.url, angular.copy($scope.params))
+        .then(function (resource) {
+          setDirectivesValues(resource);
+        });
+      };
+    } else {
+      $scope.resourceCallback($scope.url, angular.copy($scope.params))
+      .then(function (resource) {
+        setDirectivesValues(resource);
+      });
+    }
   };
   
   // AngularJs $watch callbacks
@@ -311,17 +333,23 @@ angular.module('ngTasty.component.table', [
         if ($scope.clientSide) {
           $scope.$evalAsync(updateClientSideResource('filters'));
         } else {
-          $scope.$evalAsync(updateServerSideResource);
+          $scope.$evalAsync(updateServerSideResource('filters'));
         }
       }
     }, true);
   }
   $scope.$watchCollection('params', function watchParams (newValue, oldValue){
     if (newValue !== oldValue) {
-      if ($scope.clientSide) {
-        $scope.$evalAsync(updateClientSideResource('params'));
+      // Run update resuorce only if we are on 
+      // the second cycle or more of `params`
+      if (paramsInitialCycle === false) {
+        if ($scope.clientSide) {
+          $scope.$evalAsync(updateClientSideResource('params'));
+        } else {
+          $scope.$evalAsync(updateServerSideResource);
+        }
       } else {
-        $scope.$evalAsync(updateServerSideResource);
+        paramsInitialCycle = false;
       }
     }
   });
@@ -390,12 +418,14 @@ angular.module('ngTasty.component.table', [
   </table>
  *
  */
-.directive('tastyThead', function($filter, tableConfig, tastyUtil) {
+.directive('tastyThead', function($filter, $templateCache, $http, $compile, tableConfig, tastyUtil) {
   return {
     restrict: 'AE',
     require: '^tastyTable',
     scope: {},
-    templateUrl: 'template/table/head.html',
+    templateUrl: function(tElement, tAttrs) {
+      return tAttrs.templateUrl || tableConfig.templateHeadUrl;
+    },
     link: function postLink(scope, element, attrs, tastyTable) {
       'use strict';
       var newScopeName, listScopeToWatch;
@@ -405,7 +435,8 @@ angular.module('ngTasty.component.table', [
       scope.iconUp = tableConfig.iconUp;
       scope.iconDown = tableConfig.iconDown;
 
-      listScopeToWatch = ['bindNotSortBy', 'bindBootstrapIcon', 'bindIconUp', 'bindIconDown'];
+      listScopeToWatch = ['bindNotSortBy', 'bindBootstrapIcon', 'bindIconUp', 
+      'bindIconDown', 'bindTemplateUrl'];
       listScopeToWatch.forEach(function (scopeName) {
         newScopeName = scopeName.substring(4);
         newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
@@ -413,12 +444,20 @@ angular.module('ngTasty.component.table', [
           tastyUtil.bindTo(scopeName, scope, attrs, newScopeName);
         } else if (attrs[newScopeName]) {
           if (attrs[newScopeName][0] === '[') {
+            attrs[newScopeName] = attrs[newScopeName].replace(/'/g, '"');
             scope[newScopeName] = JSON.parse(attrs[newScopeName]);
           } else {
             scope[newScopeName] = attrs[newScopeName];
           }
         }
       });
+
+      if (scope.templateUrl) {
+        $http.get(scope.templateUrl, { cache: $templateCache })
+        .success(function(templateContent) {
+          element.replaceWith($compile(templateContent)(scope));                
+        });
+      }
 
       scope.setColumns = function () {
         var width, i, active, sortable, sort, 
@@ -571,6 +610,11 @@ angular.module('ngTasty.component.table', [
       // Default configs
       scope.itemsPerPage = scope.itemsPerPage || tableConfig.itemsPerPage;
       scope.listItemsPerPage = scope.listItemsPerPage || tableConfig.listItemsPerPage;
+
+      // Serve side table case
+      if (!tastyTable.$scope.clientSide) {
+        scope.itemsPerPage = tastyTable.$scope.init.count || scope.itemsPerPage;
+      }
 
       // Internal variable
       scope.pagination = {};
