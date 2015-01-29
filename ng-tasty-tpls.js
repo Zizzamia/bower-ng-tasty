@@ -2,7 +2,7 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.4.7 - 2015-01-27
+ * Version: 0.4.8 - 2015-01-28
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.tpls", "ngTasty.component.table","ngTasty.filter.camelize","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.filter.slugify","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket"]);
@@ -62,13 +62,23 @@ angular.module('ngTasty.component.table', [
     'buildClientResourceCount': 0
   };
 
-  listScopeToWatch = ['bindFilters', 'bindInit', 'bindQuery', 'bindResource', 
-  'bindResourceCallback', 'bindWatchResource', 'bindReload'];
+  // Each one of them is a possible attribute to start watching
+  listScopeToWatch = [
+    'bindFilters', 
+    'bindInit', 
+    'bindQuery', 
+    'bindResource', 
+    'bindResourceCallback', 
+    'bindWatchResource', 
+    'bindReload'
+  ];
   listScopeToWatch.forEach(function (scopeName) {
     newScopeName = scopeName.substring(4);
     newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
     if ($attrs[scopeName]) {
       tastyUtil.bindTo(scopeName, $scope, $attrs, newScopeName);
+    } else if (newScopeName === 'watchResource') {
+      $scope[newScopeName] = $attrs[newScopeName];
     }
   });
 
@@ -122,21 +132,22 @@ angular.module('ngTasty.component.table', [
    * these values by an isolate optional scope variable,
    * more info here https://github.com/angular/angular.js/issues/6404 */
   if (!angular.isDefined($attrs.bindResource) && !angular.isDefined($attrs.bindResourceCallback)) {
-    throw 'AngularJS tastyTable directive: need the bind-resource or bind-resource-callback attribute';
+    throw new Error('AngularJS tastyTable directive: need the ' +
+                    'bind-resource or bind-resource-callback attribute');
   }
   if (angular.isDefined($attrs.bindResource)) {
     if (!angular.isObject($scope.resource)) {
-      throw 'AngularJS tastyTable directive: the bind-resource ('+
-        $attrs.bindResource + ') is not an object';
+      throw new Error('AngularJS tastyTable directive: the bind-resource ('+
+                      $attrs.bindResource + ') is not an object');
     } else if (!$scope.resource.header && !$scope.resource.rows) {
-      throw 'AngularJS tastyTable directive: the bind-resource ('+
-        $attrs.bindResource + ') has the property header or rows undefined';
+      throw new Error('AngularJS tastyTable directive: the bind-resource ('+
+                      $attrs.bindResource + ') has the property header or rows undefined');
     }
   }
   if (angular.isDefined($attrs.bindResourceCallback)) {
     if (!angular.isFunction($scope.resourceCallback)) {
-      throw 'AngularJS tastyTable directive: the bind-resource-callback ('+
-        $attrs.bindResourceCallback + ') is not a function';
+      throw new Error('AngularJS tastyTable directive: the bind-resource-callback ('+
+                      $attrs.bindResourceCallback + ') is not a function');
     }
     $scope.clientSide = false;
   }   
@@ -200,11 +211,12 @@ angular.module('ngTasty.component.table', [
   this.bindOnce = tableConfig.bindOnce;
 
   setDirectivesValues = function (resource) {
-    if (!$scope.resource && !angular.isObject(resource)) {
-      throw 'AngularJS tastyTable directive: the resource response is not an object';
+    if (!angular.isObject(resource)) {
+      throw new Error('AngularJS tastyTable directive: the resource response '+
+                      'is not an object');
     } else if (!resource.header && !resource.rows) {
-      throw 'AngularJS tastyTable directive: the resource response object '+
-            'has the property header or rows undefined';
+      throw new Error('AngularJS tastyTable directive: the resource response object '+
+                      'has the property header or rows undefined');
     }
     Object.keys(resource).forEach(function(key) {
       if (listImmutableKey.indexOf(key) < 0) {
@@ -444,8 +456,13 @@ angular.module('ngTasty.component.table', [
       scope.iconUp = tableConfig.iconUp;
       scope.iconDown = tableConfig.iconDown;
 
-      listScopeToWatch = ['bindNotSortBy', 'bindBootstrapIcon', 'bindIconUp', 
-      'bindIconDown', 'bindTemplateUrl'];
+      listScopeToWatch = [
+        'bindNotSortBy', 
+        'bindBootstrapIcon', 
+        'bindIconUp', 
+        'bindIconDown',
+        'bindTemplateUrl'
+      ];
       listScopeToWatch.forEach(function (scopeName) {
         newScopeName = scopeName.substring(4);
         newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
@@ -470,7 +487,7 @@ angular.module('ngTasty.component.table', [
 
       scope.setColumns = function () {
         var width, i, active, sortable, sort, 
-        isSorted, isSortedCaret;
+            isSorted, isSortedCaret;
         scope.columns = [];
         scope.header.columns.forEach(function (column, index) {
           column.style = column.style || {};
@@ -590,7 +607,11 @@ angular.module('ngTasty.component.table', [
       var getPage, setCount, setPaginationRange, setPreviousRange, 
           setRemainingRange, setPaginationRanges, listScopeToWatch, newScopeName;
 
-      listScopeToWatch = ['bindItemsPerPage', 'bindListItemsPerPage', 'bindTemplateUrl'];
+      listScopeToWatch = [
+        'bindItemsPerPage', 
+        'bindListItemsPerPage', 
+        'bindTemplateUrl'
+      ];
       listScopeToWatch.forEach(function (scopeName) {
         newScopeName = scopeName.substring(4);
         newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
@@ -777,7 +798,8 @@ angular.module('ngTasty.filter.camelize', [])
  * @function
  *
  * @description
- * Calling toString will return the ...
+ * Calling cleanFieldName will replace all 
+ * empty space with with -
  *
  * @example
   ng-bind="key | cleanFieldName"
