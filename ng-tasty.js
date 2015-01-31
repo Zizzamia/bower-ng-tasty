@@ -2,7 +2,7 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.4.8 - 2015-01-28
+ * Version: 0.5.0 - 2015-01-31
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.component.table","ngTasty.filter.camelize","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.filter.slugify","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket"]);
@@ -64,6 +64,7 @@ angular.module('ngTasty.component.table', [
   // Each one of them is a possible attribute to start watching
   listScopeToWatch = [
     'bindFilters', 
+    'bindFiltersComparator',
     'bindInit', 
     'bindQuery', 
     'bindResource', 
@@ -76,8 +77,10 @@ angular.module('ngTasty.component.table', [
     newScopeName = newScopeName.charAt(0).toLowerCase() + newScopeName.slice(1);
     if ($attrs[scopeName]) {
       tastyUtil.bindTo(scopeName, $scope, $attrs, newScopeName);
-    } else if (newScopeName === 'watchResource') {
+    } else if ($attrs[newScopeName] && newScopeName === 'watchResource') {
       $scope[newScopeName] = $attrs[newScopeName];
+    } else if ($attrs[newScopeName] && newScopeName === 'filtersComparator') {
+      $scope[newScopeName] = JSON.parse($attrs[newScopeName]);
     }
   });
 
@@ -280,7 +283,7 @@ angular.module('ngTasty.component.table', [
       }
     }
     if ($attrs.bindFilters) {
-      $scope.rows = $filter('filter')($scope.rows, $scope.filters);
+      $scope.rows = $filter('filter')($scope.rows, $scope.filters, $scope.filtersComparator);
     }
     if ($scope.paginationDirective) {
       if (updateFrom === 'filters') {
