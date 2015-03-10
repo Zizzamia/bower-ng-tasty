@@ -39,7 +39,6 @@ angular.module('ngTasty.component.table', [
   watchResource: 'reference'
 })
 .controller('TableController', function($scope, $attrs, $filter, tableConfig, tastyUtil) {
-  'use strict';
   var listScopeToWatch, initTable, newScopeName, initStatus,
       updateClientSideResource, updateServerSideResource, setDirectivesValues,
       buildClientResource, buildUrl, paramsInitialCycle, initNow;
@@ -278,14 +277,16 @@ angular.module('ngTasty.component.table', [
       $scope.rows = $filter('filter')($scope.rows, $scope.filters, $scope.filtersComparator);
     }
     if ($scope.paginationDirective) {
-      if (updateFrom === 'filters') {
-        $scope.pagination.page = 1;
-      } else {
-        $scope.pagination.page = $scope.params.page;
-      }
       $scope.pagination.count = $scope.params.count;
       $scope.pagination.size = $scope.rows.length;
       $scope.pagination.pages = Math.ceil($scope.rows.length / $scope.pagination.count);
+      if (updateFrom === 'filters' || 
+          $scope.pagination.page > $scope.pagination.pages) {
+        $scope.pagination.page = 1;
+        $scope.params.page = 1;
+      } else {
+        $scope.pagination.page = $scope.params.page;
+      }
       toRow = $scope.pagination.count * $scope.pagination.page;
       fromRow = toRow - $scope.pagination.count;
       if (fromRow >= 0 && toRow >= 0) {
@@ -320,6 +321,17 @@ angular.module('ngTasty.component.table', [
   };
 
   updateClientSideResource = function (updateFrom) {
+    if ($scope.params.sortBy) {
+      $scope.resource.sortBy = $scope.params.sortBy;
+    }
+    if ($scope.params.sortOrder) {
+      $scope.resource.sortOrder = $scope.params.sortOrder;
+    }
+    if ($scope.params.page && $scope.params.count) {
+      $scope.resource.pagination = $scope.pagination;
+      $scope.resource.pagination.page = $scope.params.page;
+      $scope.resource.pagination.count = $scope.params.count;
+    }
     setDirectivesValues($scope.resource);
     buildClientResource(updateFrom);
   };
@@ -375,7 +387,7 @@ angular.module('ngTasty.component.table', [
         $scope.params.sortOrder = newValue.sortOrder;
         $scope.$evalAsync(updateClientSideResource('resource'));
         if (!$scope.resource.reload) {
-          $scope.resource.reload = function () {
+          $scope.resource.reload = function reloadResource () {
             $scope.$evalAsync(updateClientSideResource('resource'));
           };
         }
@@ -386,20 +398,21 @@ angular.module('ngTasty.component.table', [
     } else if ($scope.watchResource === 'collection') {
       $scope.$watchCollection('resource.header', watchResource);
       $scope.$watchCollection('resource.rows', watchResource);
-      $scope.$watchGroup(['sortBy', 
-        'sortOrder', 
-        'pagination.count',
-        'pagination.page',
-        'pagination.pages',
-        'pagination.size'], watchResource);
+      $scope.$watchGroup(['resource.sortBy', 
+        'resource.sortOrder', 
+        'resource.pagination.count',
+        'resource.pagination.page',
+        'resource.pagination.pages',
+        'resource.pagination.size'], watchResource);
     } else if ($scope.watchResource === 'equality') {
-      $scope.$watch('resource', function (newValue, oldValue){
-        if (newValue !== oldValue) {
-          $scope.params.sortBy = newValue.sortBy;
-          $scope.params.sortOrder = newValue.sortOrder;
-          $scope.$evalAsync(updateClientSideResource('resource'));
-        }
-      }, true);
+      $scope.$watch('resource.header', watchResource, true);
+      $scope.$watch('resource.rows', watchResource, true);
+      $scope.$watch('resource.sortBy', watchResource, true);
+      $scope.$watch('resource.sortOrder', watchResource, true);
+      $scope.$watch('resource.pagination.count', watchResource, true);
+      $scope.$watch('resource.pagination.page', watchResource, true);
+      $scope.$watch('resource.pagination.pages', watchResource, true);
+      $scope.$watch('resource.pagination.size', watchResource, true);
     }
   }
 })
@@ -442,7 +455,6 @@ angular.module('ngTasty.component.table', [
       return tAttrs.templateUrl || tableConfig.templateHeadUrl;
     },
     link: function postLink(scope, element, attrs, tastyTable) {
-      'use strict';
       var newScopeName, listScopeToWatch;
       scope.bindOnce = tastyTable.bindOnce;
       scope.columns = [];
@@ -483,8 +495,16 @@ angular.module('ngTasty.component.table', [
         var width, i, active, sortable, sort, 
             isSorted, isSortedCaret;
         scope.columns = [];
+        if (scope.header.sortOrder === 'dsc' && 
+            scope.header.sortBy &&
+            scope.header.sortBy[0] !== '-') {
+          scope.header.sortBy = '-' + scope.header.sortBy;
+        }
         scope.header.columns.forEach(function (column, index) {
           column.style = column.style || {};
+          if (!angular.isArray(column.class)) {
+            column.class = [];
+          }
           sortable = true;
           active = false;
           isSorted = '';
@@ -523,16 +543,12 @@ angular.module('ngTasty.component.table', [
             'name': column.name,
             'active': active,
             'sortable': sortable,
+            'class': column.class,
             'style': column.style,
             'isSorted': isSorted,
             'isSortedCaret': isSortedCaret
           });
         });
-        if (scope.header.sortOrder === 'dsc' && 
-            scope.header.sortBy &&
-            scope.header.sortBy[0] !== '-') {
-          scope.header.sortBy = '-' + scope.header.sortBy;
-        }
         if (!tastyTable.start) {
           // Thead it's called
           tastyTable.initTable('thead');
@@ -562,6 +578,9 @@ angular.module('ngTasty.component.table', [
         if (column.active) {
           listClassToShow.push('active');
         }
+        column.class.forEach(function getListClass (className) {
+          listClassToShow.push(className);
+        });
         return listClassToShow;
       };
 
@@ -597,7 +616,6 @@ angular.module('ngTasty.component.table', [
       return tAttrs.templateUrl || tableConfig.templateUrl;
     },
     link: function postLink(scope, element, attrs, tastyTable) {
-      'use strict';
       var getPage, setCount, setPaginationRange, setPreviousRange, 
           setRemainingRange, setPaginationRanges, listScopeToWatch, newScopeName;
 

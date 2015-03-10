@@ -2,7 +2,7 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.5.0 - 2015-01-31
+ * Version: 0.5.1 - 2015-03-9
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.component.table","ngTasty.filter.camelize","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.filter.slugify","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket"]);
@@ -47,7 +47,6 @@ angular.module('ngTasty.component.table', [
   watchResource: 'reference'
 })
 .controller('TableController', ["$scope", "$attrs", "$filter", "tableConfig", "tastyUtil", function($scope, $attrs, $filter, tableConfig, tastyUtil) {
-  'use strict';
   var listScopeToWatch, initTable, newScopeName, initStatus,
       updateClientSideResource, updateServerSideResource, setDirectivesValues,
       buildClientResource, buildUrl, paramsInitialCycle, initNow;
@@ -286,14 +285,16 @@ angular.module('ngTasty.component.table', [
       $scope.rows = $filter('filter')($scope.rows, $scope.filters, $scope.filtersComparator);
     }
     if ($scope.paginationDirective) {
-      if (updateFrom === 'filters') {
-        $scope.pagination.page = 1;
-      } else {
-        $scope.pagination.page = $scope.params.page;
-      }
       $scope.pagination.count = $scope.params.count;
       $scope.pagination.size = $scope.rows.length;
       $scope.pagination.pages = Math.ceil($scope.rows.length / $scope.pagination.count);
+      if (updateFrom === 'filters' || 
+          $scope.pagination.page > $scope.pagination.pages) {
+        $scope.pagination.page = 1;
+        $scope.params.page = 1;
+      } else {
+        $scope.pagination.page = $scope.params.page;
+      }
       toRow = $scope.pagination.count * $scope.pagination.page;
       fromRow = toRow - $scope.pagination.count;
       if (fromRow >= 0 && toRow >= 0) {
@@ -328,6 +329,17 @@ angular.module('ngTasty.component.table', [
   };
 
   updateClientSideResource = function (updateFrom) {
+    if ($scope.params.sortBy) {
+      $scope.resource.sortBy = $scope.params.sortBy;
+    }
+    if ($scope.params.sortOrder) {
+      $scope.resource.sortOrder = $scope.params.sortOrder;
+    }
+    if ($scope.params.page && $scope.params.count) {
+      $scope.resource.pagination = $scope.pagination;
+      $scope.resource.pagination.page = $scope.params.page;
+      $scope.resource.pagination.count = $scope.params.count;
+    }
     setDirectivesValues($scope.resource);
     buildClientResource(updateFrom);
   };
@@ -383,7 +395,7 @@ angular.module('ngTasty.component.table', [
         $scope.params.sortOrder = newValue.sortOrder;
         $scope.$evalAsync(updateClientSideResource('resource'));
         if (!$scope.resource.reload) {
-          $scope.resource.reload = function () {
+          $scope.resource.reload = function reloadResource () {
             $scope.$evalAsync(updateClientSideResource('resource'));
           };
         }
@@ -394,20 +406,21 @@ angular.module('ngTasty.component.table', [
     } else if ($scope.watchResource === 'collection') {
       $scope.$watchCollection('resource.header', watchResource);
       $scope.$watchCollection('resource.rows', watchResource);
-      $scope.$watchGroup(['sortBy', 
-        'sortOrder', 
-        'pagination.count',
-        'pagination.page',
-        'pagination.pages',
-        'pagination.size'], watchResource);
+      $scope.$watchGroup(['resource.sortBy', 
+        'resource.sortOrder', 
+        'resource.pagination.count',
+        'resource.pagination.page',
+        'resource.pagination.pages',
+        'resource.pagination.size'], watchResource);
     } else if ($scope.watchResource === 'equality') {
-      $scope.$watch('resource', function (newValue, oldValue){
-        if (newValue !== oldValue) {
-          $scope.params.sortBy = newValue.sortBy;
-          $scope.params.sortOrder = newValue.sortOrder;
-          $scope.$evalAsync(updateClientSideResource('resource'));
-        }
-      }, true);
+      $scope.$watch('resource.header', watchResource, true);
+      $scope.$watch('resource.rows', watchResource, true);
+      $scope.$watch('resource.sortBy', watchResource, true);
+      $scope.$watch('resource.sortOrder', watchResource, true);
+      $scope.$watch('resource.pagination.count', watchResource, true);
+      $scope.$watch('resource.pagination.page', watchResource, true);
+      $scope.$watch('resource.pagination.pages', watchResource, true);
+      $scope.$watch('resource.pagination.size', watchResource, true);
     }
   }
 }])
@@ -450,7 +463,6 @@ angular.module('ngTasty.component.table', [
       return tAttrs.templateUrl || tableConfig.templateHeadUrl;
     },
     link: function postLink(scope, element, attrs, tastyTable) {
-      'use strict';
       var newScopeName, listScopeToWatch;
       scope.bindOnce = tastyTable.bindOnce;
       scope.columns = [];
@@ -491,8 +503,16 @@ angular.module('ngTasty.component.table', [
         var width, i, active, sortable, sort, 
             isSorted, isSortedCaret;
         scope.columns = [];
+        if (scope.header.sortOrder === 'dsc' && 
+            scope.header.sortBy &&
+            scope.header.sortBy[0] !== '-') {
+          scope.header.sortBy = '-' + scope.header.sortBy;
+        }
         scope.header.columns.forEach(function (column, index) {
           column.style = column.style || {};
+          if (!angular.isArray(column.class)) {
+            column.class = [];
+          }
           sortable = true;
           active = false;
           isSorted = '';
@@ -531,16 +551,12 @@ angular.module('ngTasty.component.table', [
             'name': column.name,
             'active': active,
             'sortable': sortable,
+            'class': column.class,
             'style': column.style,
             'isSorted': isSorted,
             'isSortedCaret': isSortedCaret
           });
         });
-        if (scope.header.sortOrder === 'dsc' && 
-            scope.header.sortBy &&
-            scope.header.sortBy[0] !== '-') {
-          scope.header.sortBy = '-' + scope.header.sortBy;
-        }
         if (!tastyTable.start) {
           // Thead it's called
           tastyTable.initTable('thead');
@@ -570,6 +586,9 @@ angular.module('ngTasty.component.table', [
         if (column.active) {
           listClassToShow.push('active');
         }
+        column.class.forEach(function getListClass (className) {
+          listClassToShow.push(className);
+        });
         return listClassToShow;
       };
 
@@ -605,7 +624,6 @@ angular.module('ngTasty.component.table', [
       return tAttrs.templateUrl || tableConfig.templateUrl;
     },
     link: function postLink(scope, element, attrs, tastyTable) {
-      'use strict';
       var getPage, setCount, setPaginationRange, setPreviousRange, 
           setRemainingRange, setPaginationRanges, listScopeToWatch, newScopeName;
 
@@ -774,7 +792,7 @@ angular.module('ngTasty.filter.camelize', [])
   
   return function (input, first) {
     var isString = typeof input === 'string',
-      first = typeof first === 'undefined' ? false : !!first;
+        firstLetter = typeof first === 'undefined' ? false : !!first;
     
     if(typeof input === 'undefined' || 
        input === null || 
@@ -786,11 +804,15 @@ angular.module('ngTasty.filter.camelize', [])
       return '' + input;
     }
     
-    return input.trim() //remove trailing spaces
-      .replace(/ +(?= )/g,'') //remove multiple WS
-    	.replace(CAMELIZE_REGEX, function (_, character, pos) { //actual conversion
-    		return character && (first || pos > 0) ? character.toUpperCase () : character;
-    	});
+    return input.trim() // remove trailing spaces
+      .replace(/ +(?= )/g,'') // remove multiple WS
+      .replace(CAMELIZE_REGEX, function (_, character, pos) { // actual conversion
+        if (character && (firstLetter || pos > 0)) {
+          return character.toUpperCase();
+        } else {
+          return character;
+        }
+      });
   };
 });
 
@@ -891,32 +913,22 @@ angular.module('ngTasty.filter.slugify', [])
     return '' + object;
   };
 
-  var defaultToWhiteSpace = function (characters) {
-    if (characters == null) {
-      return '\\s';
-    } else if (characters.source) {
-      return characters.source;
-    } else {
-      return '[' + characters.replace(/([.*+?^=!:${}()|[\]\/\\])/g, '\\$1') + ']';
-    }
-  };
-
-  var from  = "ąàáäâãåæăćčĉęèéëêĝĥìíïîĵłľńňòóöőôõðøśșšŝťțŭùúüűûñÿýçżźž",
-      to    = "aaaaaaaaaccceeeeeghiiiijllnnoooooooossssttuuuuuunyyczzz",
-      regex = new RegExp(defaultToWhiteSpace(from), 'g');
+  var from  = 'ąàáäâãåæăćčĉęèéëêĝĥìíïîĵłľńňòóöőôõðøśșšŝťțŭùúüűûñÿýçżźž',
+      to    = 'aaaaaaaaaccceeeeeghiiiijllnnoooooooossssttuuuuuunyyczzz',
+      regex = new RegExp('[' + from + ']', 'g');
 
   return function (str) {
     str = makeString(str)
-    .toString() //make sure is a string
+    .toString() // make sure is a string
     .toLowerCase()
     .replace(regex, function (c){
       var index = from.indexOf(c);
       return to.charAt(index) || '-';
-    }) //normalize some foreign characters
-    .replace(/[^\w\-\s]+/g, '') //remove unwanted characters
+    }) // normalize some foreign characters
+    .replace(/[^\w\-\s]+/g, '') // remove unwanted characters
     .trim() //trim spaces
-    .replace(/\s+/g, '-') //replace any space with a dash
-    .replace(/\-\-+/g, '-'); //remove duplicate dashes
+    .replace(/\s+/g, '-') // replace any space with a dash
+    .replace(/\-\-+/g, '-'); // remove duplicate dashes
     return str;
   };
 });
@@ -976,7 +988,7 @@ angular.module('ngTasty.service.debounce', [])
 .factory('debounce', ["$timeout", function ($timeout) {
   return function (func, wait, immediate) {
     var args, context, debounceTimeout, timeout;
-    var debounceTimeout = function() {
+    debounceTimeout = function() {
       timeout = null;
       if (!immediate) {
         func.apply(context, args);
@@ -1073,7 +1085,7 @@ angular.module('ngTasty.service.tastyUtil', [
 angular.module('ngTasty.service.throttle', [])
 .factory('throttle', ["$timeout", function ($timeout) {
   return function (fn, threshhold, scope) {
-    threshhold || (threshhold = 250);
+    threshhold = threshhold || 250;
     var last, promise;
     return function throttle () {
       var context = scope || this;
