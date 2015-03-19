@@ -2,14 +2,14 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.5.1 - 2015-03-9
+ * Version: 0.5.2 - 2015-03-18
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.tpls", "ngTasty.component.table","ngTasty.filter.camelize","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.filter.slugify","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket"]);
 angular.module("ngTasty.tpls", ["ngTasty.tpls.table.head","ngTasty.tpls.table.pagination"]);
 /**
  * @ngdoc directive
- * @name tastyTable
+ * @name ngTasty.component.tastyTable
  *
  * @example
   <table tasty-table>
@@ -60,6 +60,7 @@ angular.module('ngTasty.component.table', [
   $scope.logs = {
     'buildClientResourceCount': 0
   };
+  $scope.theme = {};
 
   // Each one of them is a possible attribute to start watching
   listScopeToWatch = [
@@ -70,7 +71,8 @@ angular.module('ngTasty.component.table', [
     'bindResource', 
     'bindResourceCallback', 
     'bindWatchResource', 
-    'bindReload'
+    'bindReload',
+    'bindTheme'
   ];
   listScopeToWatch.forEach(function (scopeName) {
     newScopeName = scopeName.substring(4);
@@ -84,21 +86,31 @@ angular.module('ngTasty.component.table', [
     }
   });
 
+  // Default theme
+  this.config = {};
+  if (angular.isObject($scope.theme)) {
+    Object.keys(tableConfig).forEach(function(key) {
+      this.config[key] = $scope.theme[key] || tableConfig[key];
+    }, this);
+  } else {
+    this.config = tableConfig;
+  }
+
   // Default configs
-  $scope.query.page = $scope.query.page || tableConfig.query.page;
-  $scope.query.count = $scope.query.count || tableConfig.query.count;
-  $scope.query.sortBy = $scope.query.sortBy || tableConfig.query.sortBy;
-  $scope.query.sortOrder = $scope.query.sortOrder || tableConfig.query.sortOrder;
+  $scope.query.page = $scope.query.page || this.config.query.page;
+  $scope.query.count = $scope.query.count || this.config.query.count;
+  $scope.query.sortBy = $scope.query.sortBy || this.config.query.sortBy;
+  $scope.query.sortOrder = $scope.query.sortOrder || this.config.query.sortOrder;
 
   // Set init configs
   if ($scope.reload) {
     initNow = false;
   }
-  $scope.init.count = $scope.init.count || tableConfig.init.count;
-  $scope.init.page = $scope.init.page || tableConfig.init.page;
-  $scope.init.sortBy = $scope.init.sortBy || tableConfig.init.sortBy;
-  $scope.init.sortOrder = $scope.init.sortOrder || tableConfig.init.sortOrder;
-  $scope.watchResource = $scope.watchResource || tableConfig.watchResource;
+  $scope.init.count = $scope.init.count || this.config.init.count;
+  $scope.init.page = $scope.init.page || this.config.init.page;
+  $scope.init.sortBy = $scope.init.sortBy || this.config.init.sortBy;
+  $scope.init.sortOrder = $scope.init.sortOrder || this.config.init.sortOrder;
+  $scope.watchResource = $scope.watchResource || this.config.watchResource;
 
   // Defualt variables
   var listImmutableKey =[
@@ -198,19 +210,27 @@ angular.module('ngTasty.component.table', [
         }
         if (initNow) {
           $scope.$evalAsync(updateClientSideResource);
-        }
+        } 
       } else {
         $scope.params.sortBy = $scope.init.sortBy;
         $scope.params.sortOrder = $scope.init.sortOrder;
         $scope.params.page = $scope.init.page;
         if (initNow) {
           $scope.$evalAsync(updateServerSideResource);
+        } else if ($scope.reload) {
+          $scope.url = buildUrl($scope.params, $scope.filters);
+          $scope.reload = function () {
+            $scope.resourceCallback($scope.url, angular.copy($scope.params))
+            .then(function (resource) {
+              setDirectivesValues(resource);
+            });
+          };
         }
       }
     }
   };
 
-  this.bindOnce = tableConfig.bindOnce;
+  this.bindOnce = this.config.bindOnce;
 
   setDirectivesValues = function (resource) {
     if (!angular.isObject(resource)) {
@@ -347,14 +367,15 @@ angular.module('ngTasty.component.table', [
 
   updateServerSideResource = function (updateFrom) {
     $scope.url = buildUrl($scope.params, $scope.filters);
-    if ($scope.reload && updateFrom === 'filters') {
+    if ($scope.reload) {
       $scope.reload = function () {
         $scope.resourceCallback($scope.url, angular.copy($scope.params))
         .then(function (resource) {
           setDirectivesValues(resource);
         });
       };
-    } else {
+    }
+    if (!$scope.reload || $scope.reload && updateFrom !== 'filters') {
       $scope.resourceCallback($scope.url, angular.copy($scope.params))
       .then(function (resource) {
         setDirectivesValues(resource);
@@ -392,8 +413,8 @@ angular.module('ngTasty.component.table', [
   if ($scope.resource) {
     var watchResource = function (newValue, oldValue){
       if (newValue !== oldValue) {
-        $scope.params.sortBy = newValue.sortBy;
-        $scope.params.sortOrder = newValue.sortOrder;
+        $scope.params.sortBy = $scope.resource.sortBy || $scope.params.sortBy;
+        $scope.params.sortOrder = $scope.resource.sortOrder || $scope.params.sortOrder;
         $scope.$evalAsync(updateClientSideResource('resource'));
         if (!$scope.resource.reload) {
           $scope.resource.reload = function reloadResource () {
@@ -446,7 +467,7 @@ angular.module('ngTasty.component.table', [
 
 /**
  * @ngdoc directive
- * @name tastyThead
+ * @name ngTasty.component.tastyThead
  *
  * @example
   <table tasty-table>
@@ -460,16 +481,14 @@ angular.module('ngTasty.component.table', [
     restrict: 'AE',
     require: '^tastyTable',
     scope: {},
-    templateUrl: function(tElement, tAttrs) {
-      return tAttrs.templateUrl || tableConfig.templateHeadUrl;
-    },
+    templateUrl: tableConfig.templateHeadUrl,
     link: function postLink(scope, element, attrs, tastyTable) {
       var newScopeName, listScopeToWatch;
       scope.bindOnce = tastyTable.bindOnce;
       scope.columns = [];
-      scope.bootstrapIcon = tableConfig.bootstrapIcon;
-      scope.iconUp = tableConfig.iconUp;
-      scope.iconDown = tableConfig.iconDown;
+      scope.bootstrapIcon = tastyTable.config.bootstrapIcon;
+      scope.iconUp = tastyTable.config.iconUp;
+      scope.iconDown = tastyTable.config.iconDown;
 
       listScopeToWatch = [
         'bindNotSortBy', 
@@ -533,14 +552,14 @@ angular.module('ngTasty.component.table', [
           }
           sort = $filter('cleanFieldName')(column.key);
           if (scope.header.sortBy === '-' + sort) {
-            if (tableConfig.bootstrapIcon) {
+            if (tastyTable.config.bootstrapIcon) {
               isSorted = '';
               isSortedCaret = 'caret';
             } else {
               isSorted = scope.iconDown;
             }
           } else if (scope.header.sortBy === sort) {
-            if (tableConfig.bootstrapIcon) {
+            if (tastyTable.config.bootstrapIcon) {
               isSorted = 'dropup';
               isSortedCaret = 'caret';
             } else {
@@ -605,7 +624,7 @@ angular.module('ngTasty.component.table', [
 
 /**
  * @ngdoc directive
- * @name tastyPagination
+ * @name ngTasty.component.tastyPagination
  *
  * @example
   <div tasty-table>
@@ -621,9 +640,7 @@ angular.module('ngTasty.component.table', [
     restrict: 'AE',
     require: '^tastyTable',
     scope: {},
-    templateUrl: function(tElement, tAttrs) {
-      return tAttrs.templateUrl || tableConfig.templateUrl;
-    },
+    templateUrl: tableConfig.templateUrl,
     link: function postLink(scope, element, attrs, tastyTable) {
       var getPage, setCount, setPaginationRange, setPreviousRange, 
           setRemainingRange, setPaginationRanges, listScopeToWatch, newScopeName;
@@ -659,8 +676,8 @@ angular.module('ngTasty.component.table', [
       }
 
       // Default configs
-      scope.itemsPerPage = scope.itemsPerPage || tableConfig.itemsPerPage;
-      scope.listItemsPerPage = scope.listItemsPerPage || tableConfig.listItemsPerPage;
+      scope.itemsPerPage = scope.itemsPerPage || tastyTable.config.itemsPerPage;
+      scope.listItemsPerPage = scope.listItemsPerPage || tastyTable.config.listItemsPerPage;
 
       // Serve side table case
       if (!tastyTable.$scope.clientSide) {
@@ -783,7 +800,7 @@ angular.module('ngTasty.component.table', [
 
 /**
  * @ngdoc filter
- * @name filterCamelize
+ * @name ngTasty.filter.filterCamelize
  * @function
  *
  */
@@ -819,7 +836,7 @@ angular.module('ngTasty.filter.camelize', [])
 
 /**
  * @ngdoc filter
- * @name cleanFieldName
+ * @name ngTasty.filter.cleanFieldName
  * @function
  *
  * @description
@@ -839,7 +856,7 @@ angular.module('ngTasty.filter.cleanFieldName', [])
 
 /**
  * @ngdoc filter
- * @name filterInt
+ * @name ngTasty.filter.filterInt
  * @function
  *
  */
@@ -855,7 +872,7 @@ angular.module('ngTasty.filter.filterInt', [])
 
 /**
  * @ngdoc filter
- * @name range
+ * @name ngTasty.filter.range
  * @function
  *
  * @description
@@ -1090,7 +1107,7 @@ angular.module('ngTasty.service.throttle', [])
     var last, promise;
     return function throttle () {
       var context = scope || this;
-      var now = +new Date,
+      var now = Date.now(),
           args = arguments;
       if (last && now < last + threshhold) {
         // hold on to it
