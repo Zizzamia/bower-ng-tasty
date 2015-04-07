@@ -2,11 +2,164 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.5.2 - 2015-03-18
+ * Version: 0.5.3 - 2015-04-06
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.tpls", "ngTasty.component.table","ngTasty.filter.camelize","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.filter.slugify","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket"]);
 angular.module("ngTasty.tpls", ["ngTasty.tpls.table.head","ngTasty.tpls.table.pagination"]);
+/**
+ * @ngdoc filter
+ * @name ngTasty.filter.filterCamelize
+ * @function
+ *
+ */
+angular.module('ngTasty.filter.camelize', [])
+.filter('camelize', function() {
+  var CAMELIZE_REGEX = /(?:^|[-_ ])(\w)/g;
+  
+  return function (input, first) {
+    var isString = typeof input === 'string',
+        firstLetter = typeof first === 'undefined' ? false : !!first;
+    
+    if(typeof input === 'undefined' || 
+       input === null || 
+       (!isString && isNaN(input)) ) {
+      return '';
+    }
+
+    if(!isString){
+      return '' + input;
+    }
+    
+    return input.trim() // remove trailing spaces
+      .replace(/ +(?= )/g,'') // remove multiple WS
+      .replace(CAMELIZE_REGEX, function (_, character, pos) { // actual conversion
+        if (character && (firstLetter || pos > 0)) {
+          return character.toUpperCase();
+        } else {
+          return character;
+        }
+      });
+  };
+});
+
+/**
+ * @ngdoc filter
+ * @name ngTasty.filter.cleanFieldName
+ * @function
+ *
+ * @description
+ * Calling cleanFieldName will replace all 
+ * empty space with with -
+ *
+ * @example
+  ng-bind="key | cleanFieldName"
+ *
+ */
+angular.module('ngTasty.filter.cleanFieldName', [])
+.filter('cleanFieldName', function() {
+  return function (input) {
+    return input.replace(/[^a-zA-Z0-9-_-]+/g, '-');
+  };
+});
+
+/**
+ * @ngdoc filter
+ * @name ngTasty.filter.filterInt
+ * @function
+ *
+ */
+angular.module('ngTasty.filter.filterInt', [])
+.filter('filterInt', function() {
+  return function (input) {
+    if(/^(\-|\+)?([0-9]+|Infinity)$/.test(input)) {
+      return Number(input);
+    }
+    return NaN;
+  };
+});
+
+/**
+ * @ngdoc filter
+ * @name ngTasty.filter.range
+ * @function
+ *
+ * @description
+ * Create a list containing arithmetic progressions. The arguments must 
+ * be plain integers. If the step argument is omitted, it defaults to 1. 
+ * If the start argument is omitted, it defaults to 0.
+ *
+ * @example
+  ng-repeat="n in [] | range:1:30"
+ */
+angular.module('ngTasty.filter.range', ['ngTasty.filter.filterInt'])
+.filter('range', ["$filter", function($filter) {
+  return function(input, start, stop, step) {
+    start = $filter('filterInt')(start);
+    stop = $filter('filterInt')(stop);
+    step = $filter('filterInt')(step);
+    if (isNaN(start)) {
+      start = 0;
+    }
+    if (isNaN(stop)) {
+      stop = start;
+      start = 0;
+    }
+    if (isNaN(step)) {
+      step = 1;
+    }
+    if ((step > 0 && start >= stop) || (step < 0 && start <= stop)){
+      return [];
+    }
+    for (var i = start; step > 0 ? i < stop : i > stop; i += step){
+      input.push(i);
+    }
+    return input;
+  };
+}]);
+
+/**
+ * @author https://github.com/bogdan-alexandrescu/ - @balx
+ * @ngdoc filter
+ * @name ngTasty.filter.slugify
+ * @function
+ *
+ * @description
+ * Transform text into an ascii slug by replacing whitespaces, accentuated, 
+ * and special characters with the coresponding latin character or completely 
+ * removing them when no latin equivalent is found. This can be used safely to 
+ * generate valid URLs.
+ */
+angular.module('ngTasty.filter.slugify', [])
+.filter('slugify', function () {
+
+  var makeString = function (object) {
+    if (object == null) {
+      return '';
+    }
+    return '' + object;
+  };
+
+  var from  = 'ąàáäâãåæăćčĉęèéëêĝĥìíïîĵłľńňòóöőôõðøśșšŝťțŭùúüűûñÿýçżźž',
+      to    = 'aaaaaaaaaccceeeeeghiiiijllnnoooooooossssttuuuuuunyyczzz',
+      regex = new RegExp('[' + from + ']', 'g');
+
+  return function (str) {
+    str = makeString(str)
+    .toString() // make sure is a string
+    .toLowerCase()
+    .replace(regex, function (c){
+      var index = from.indexOf(c);
+      return to.charAt(index) || '-';
+    }) // normalize some foreign characters
+    .replace(/[^\w\-\s]+/g, '') // remove unwanted characters
+    .trim() //trim spaces
+    .replace(/\s+/g, '-') // replace any space with a dash
+    .replace(/\-\-+/g, '-'); // remove duplicate dashes
+    return str;
+  };
+});
+  
 /**
  * @ngdoc directive
  * @name ngTasty.component.tastyTable
@@ -751,7 +904,7 @@ angular.module('ngTasty.component.table', [
 
         for (var i = scope.listItemsPerPage.length; i >= 0; i--) {
           if (scope.pagination.size > scope.listItemsPerPage[i]) {
-            scope.listItemsPerPageShow = scope.listItemsPerPage.slice(0, (i + 1));
+            scope.listItemsPerPageShow = scope.listItemsPerPage.slice(0, (i + 2));
             break;
           }
         }
@@ -798,159 +951,6 @@ angular.module('ngTasty.component.table', [
   };
 }]);
 
-/**
- * @ngdoc filter
- * @name ngTasty.filter.filterCamelize
- * @function
- *
- */
-angular.module('ngTasty.filter.camelize', [])
-.filter('camelize', function() {
-  var CAMELIZE_REGEX = /(?:^|[-_ ])(\w)/g;
-  
-  return function (input, first) {
-    var isString = typeof input === 'string',
-        firstLetter = typeof first === 'undefined' ? false : !!first;
-    
-    if(typeof input === 'undefined' || 
-       input === null || 
-       (!isString && isNaN(input)) ) {
-      return '';
-    }
-
-    if(!isString){
-      return '' + input;
-    }
-    
-    return input.trim() // remove trailing spaces
-      .replace(/ +(?= )/g,'') // remove multiple WS
-      .replace(CAMELIZE_REGEX, function (_, character, pos) { // actual conversion
-        if (character && (firstLetter || pos > 0)) {
-          return character.toUpperCase();
-        } else {
-          return character;
-        }
-      });
-  };
-});
-
-/**
- * @ngdoc filter
- * @name ngTasty.filter.cleanFieldName
- * @function
- *
- * @description
- * Calling cleanFieldName will replace all 
- * empty space with with -
- *
- * @example
-  ng-bind="key | cleanFieldName"
- *
- */
-angular.module('ngTasty.filter.cleanFieldName', [])
-.filter('cleanFieldName', function() {
-  return function (input) {
-    return input.replace(/[^a-zA-Z0-9-]+/g, '-');
-  };
-});
-
-/**
- * @ngdoc filter
- * @name ngTasty.filter.filterInt
- * @function
- *
- */
-angular.module('ngTasty.filter.filterInt', [])
-.filter('filterInt', function() {
-  return function (input) {
-    if(/^(\-|\+)?([0-9]+|Infinity)$/.test(input)) {
-      return Number(input);
-    }
-    return NaN;
-  };
-});
-
-/**
- * @ngdoc filter
- * @name ngTasty.filter.range
- * @function
- *
- * @description
- * Create a list containing arithmetic progressions. The arguments must 
- * be plain integers. If the step argument is omitted, it defaults to 1. 
- * If the start argument is omitted, it defaults to 0.
- *
- * @example
-  ng-repeat="n in [] | range:1:30"
- */
-angular.module('ngTasty.filter.range', ['ngTasty.filter.filterInt'])
-.filter('range', ["$filter", function($filter) {
-  return function(input, start, stop, step) {
-    start = $filter('filterInt')(start);
-    stop = $filter('filterInt')(stop);
-    step = $filter('filterInt')(step);
-    if (isNaN(start)) {
-      start = 0;
-    }
-    if (isNaN(stop)) {
-      stop = start;
-      start = 0;
-    }
-    if (isNaN(step)) {
-      step = 1;
-    }
-    if ((step > 0 && start >= stop) || (step < 0 && start <= stop)){
-      return [];
-    }
-    for (var i = start; step > 0 ? i < stop : i > stop; i += step){
-      input.push(i);
-    }
-    return input;
-  };
-}]);
-
-/**
- * @author https://github.com/bogdan-alexandrescu/ - @balx
- * @ngdoc filter
- * @name ngTasty.filter.slugify
- * @function
- *
- * @description
- * Transform text into an ascii slug by replacing whitespaces, accentuated, 
- * and special characters with the coresponding latin character or completely 
- * removing them when no latin equivalent is found. This can be used safely to 
- * generate valid URLs.
- */
-angular.module('ngTasty.filter.slugify', [])
-.filter('slugify', function () {
-
-  var makeString = function (object) {
-    if (object == null) {
-      return '';
-    }
-    return '' + object;
-  };
-
-  var from  = 'ąàáäâãåæăćčĉęèéëêĝĥìíïîĵłľńňòóöőôõðøśșšŝťțŭùúüűûñÿýçżźž',
-      to    = 'aaaaaaaaaccceeeeeghiiiijllnnoooooooossssttuuuuuunyyczzz',
-      regex = new RegExp('[' + from + ']', 'g');
-
-  return function (str) {
-    str = makeString(str)
-    .toString() // make sure is a string
-    .toLowerCase()
-    .replace(regex, function (c){
-      var index = from.indexOf(c);
-      return to.charAt(index) || '-';
-    }) // normalize some foreign characters
-    .replace(/[^\w\-\s]+/g, '') // remove unwanted characters
-    .trim() //trim spaces
-    .replace(/\s+/g, '-') // replace any space with a dash
-    .replace(/\-\-+/g, '-'); // remove duplicate dashes
-    return str;
-  };
-});
-  
 /**
  * @ngdoc service
  * @name ngTasty.service.bindTo
