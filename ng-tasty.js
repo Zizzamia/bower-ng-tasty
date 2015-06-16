@@ -2,10 +2,10 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.5.4 - 2015-05-04
+ * Version: 0.5.5 - 2015-06-15
  * License: MIT
  */
-angular.module("ngTasty", ["ngTasty.component.table","ngTasty.filter.camelize","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.filter.slugify","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket"]);
+angular.module("ngTasty", ["ngTasty.component.table","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket","ngTasty.filter.camelize","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.filter.slugify"]);
 /**
  * @ngdoc directive
  * @name ngTasty.component.tastyTable
@@ -90,7 +90,11 @@ angular.module('ngTasty.component.table', [
   this.config = {};
   if (angular.isObject($scope.theme)) {
     Object.keys(tableConfig).forEach(function(key) {
-      this.config[key] = $scope.theme[key] || tableConfig[key];
+      if (angular.isDefined($scope.theme[key])) {
+        this.config[key] = $scope.theme[key];
+      } else {
+        this.config[key] = tableConfig[key];
+      }
     }, this);
   } else {
     this.config = tableConfig;
@@ -695,6 +699,7 @@ angular.module('ngTasty.component.table', [
 
       setCount = function(count) {
         var maxItems, page;
+        scope.itemsPerPage = count;
         maxItems = count * scope.pagination.page;
         if (maxItems > scope.pagination.size) {
           page = Math.ceil(scope.pagination.size / count);
@@ -720,20 +725,22 @@ angular.module('ngTasty.component.table', [
           return false;
         }
         scope.pagMaxRange = scope.pagMinRange;
-        scope.pagMinRange = scope.pagMaxRange - scope.itemsPerPage;
+        scope.pagMinRange = scope.pagMaxRange - 5;
         setPaginationRanges();
       };
 
       setRemainingRange = function () {
-        if (scope.pagHideMaxRange === true || scope.pagMaxRange > scope.pagination.pages) {
+        if (scope.pagHideMaxRange === true || 
+            scope.pagMaxRange > scope.pagination.pages) {
           return false;
         }
         scope.pagMinRange = scope.pagMaxRange;
-        scope.pagMaxRange = scope.pagMinRange + scope.itemsPerPage;
-        if (scope.pagMaxRange > scope.pagination.pages) {
-          scope.pagMaxRange = scope.pagination.pages;
+        scope.pagMaxRange = scope.pagMinRange + 5;
+        if (scope.pagMaxRange >= scope.pagination.pages) {
+          scope.pagMaxRange = scope.pagination.pages + 1;
+          scope.pagMinRange = scope.pagMaxRange - 5 + 1;
         }
-        scope.pagMinRange = scope.pagMaxRange - scope.itemsPerPage;
+        scope.pagMinRange = scope.pagMaxRange - 5;
         setPaginationRanges();
       };
 
@@ -745,7 +752,7 @@ angular.module('ngTasty.component.table', [
           scope.pagMaxRange = scope.pagination.pages + 1;
         }
         scope.pagHideMinRange = scope.pagMinRange <= 1;
-        scope.pagHideMaxRange = scope.pagMaxRange >= scope.pagination.pages;
+        scope.pagHideMaxRange = scope.pagMaxRange > scope.pagination.pages;
         scope.classPageMinRange = scope.pagHideMinRange ? 'disabled' : '';
         scope.classPageMaxRange = scope.pagHideMaxRange ? 'disabled' : '';
 
@@ -755,7 +762,6 @@ angular.module('ngTasty.component.table', [
             break;
           }
         }
-
         scope.rangePage = $filter('range')([], scope.pagMinRange, scope.pagMaxRange);
 
         if (!tastyTable.start) {
