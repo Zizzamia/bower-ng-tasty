@@ -374,8 +374,8 @@ angular.module('ngTasty.component.table', [
           setDirectivesValues(resource);
         });
       };
-    } 
-    if (initNow) {
+    }
+    if (initNow || updateFrom === 'params') {
       $scope.resourceCallback($scope.url, angular.copy($scope.params))
       .then(function (resource) {
         setDirectivesValues(resource);
@@ -403,7 +403,7 @@ angular.module('ngTasty.component.table', [
         if ($scope.clientSide) {
           $scope.$evalAsync(updateClientSideResource('params'));
         } else {
-          $scope.$evalAsync(updateServerSideResource);
+          $scope.$evalAsync(updateServerSideResource('params'));
         }
       } else {
         paramsInitialCycle = false;

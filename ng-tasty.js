@@ -2,7 +2,7 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.5.6 - 2015-07-11
+ * Version: 0.5.7 - 2015-07-26
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.component.table","ngTasty.filter.camelize","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.filter.slugify","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket"]);
@@ -382,8 +382,8 @@ angular.module('ngTasty.component.table', [
           setDirectivesValues(resource);
         });
       };
-    } 
-    if (initNow) {
+    }
+    if (initNow || updateFrom === 'params') {
       $scope.resourceCallback($scope.url, angular.copy($scope.params))
       .then(function (resource) {
         setDirectivesValues(resource);
@@ -411,7 +411,7 @@ angular.module('ngTasty.component.table', [
         if ($scope.clientSide) {
           $scope.$evalAsync(updateClientSideResource('params'));
         } else {
-          $scope.$evalAsync(updateServerSideResource);
+          $scope.$evalAsync(updateServerSideResource('params'));
         }
       } else {
         paramsInitialCycle = false;
