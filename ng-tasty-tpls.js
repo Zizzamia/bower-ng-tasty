@@ -2,7 +2,7 @@
  * ng-tasty
  * https://github.com/Zizzamia/ng-tasty
 
- * Version: 0.6.0 - 2015-12-26
+ * Version: 0.6.1 - 2016-01-01
  * License: MIT
  */
 angular.module("ngTasty", ["ngTasty.tpls", "ngTasty.component.table","ngTasty.filter.camelize","ngTasty.filter.cleanFieldName","ngTasty.filter.filterInt","ngTasty.filter.range","ngTasty.filter.slugify","ngTasty.service.bindTo","ngTasty.service.debounce","ngTasty.service.joinObjects","ngTasty.service.setProperty","ngTasty.service.tastyUtil","ngTasty.service.throttle","ngTasty.service.webSocket"]);
@@ -160,21 +160,21 @@ angular.module('ngTasty.component.table', [
    * these values by an isolate optional scope variable,
    * more info here https://github.com/angular/angular.js/issues/6404 */
   if (!angular.isDefined($attrs.bindResource) && !angular.isDefined($attrs.bindResourceCallback)) {
-    throw new Error('AngularJS tastyTable directive: need the ' +
+    throw new Error('Angular tastyTable directive: need the ' +
                     'bind-resource or bind-resource-callback attribute');
   }
   if (angular.isDefined($attrs.bindResource)) {
     if (!angular.isObject($scope.resource)) {
-      throw new Error('AngularJS tastyTable directive: the bind-resource ('+
+      throw new Error('Angular tastyTable directive: the bind-resource ('+
                       $attrs.bindResource + ') is not an object');
     } else if (!$scope.resource.header && !$scope.resource.rows) {
-      throw new Error('AngularJS tastyTable directive: the bind-resource ('+
+      throw new Error('Angular tastyTable directive: the bind-resource ('+
                       $attrs.bindResource + ') has the property header or rows undefined');
     }
   }
   if (angular.isDefined($attrs.bindResourceCallback)) {
     if (!angular.isFunction($scope.resourceCallback)) {
-      throw new Error('AngularJS tastyTable directive: the bind-resource-callback ('+
+      throw new Error('Angular tastyTable directive: the bind-resource-callback ('+
                       $attrs.bindResourceCallback + ') is not a function');
     }
     $scope.clientSide = false;
@@ -248,10 +248,10 @@ angular.module('ngTasty.component.table', [
 
   setDirectivesValues = function (resource) {
     if (!angular.isObject(resource)) {
-      throw new Error('AngularJS tastyTable directive: the resource response '+
+      throw new Error('Angular tastyTable directive: the resource response '+
                       'is not an object');
     } else if (!resource.header && !resource.rows) {
-      throw new Error('AngularJS tastyTable directive: the resource response object '+
+      throw new Error('Angular tastyTable directive: the resource response object '+
                       'has the property header or rows undefined');
     }
     Object.keys(resource).forEach(function(key) {
@@ -308,11 +308,17 @@ angular.module('ngTasty.component.table', [
     if ($scope.theadDirective && $scope.header.columns.length) {
       reverse = $scope.header.sortOrder === 'asc' ? false : true;
       listSortBy = [function(item) {
-        return item[$scope.header.sortBy];
+        return $scope.header.sortBy.split('.')
+        .reduce(function (previousValue, currentValue) {
+          return previousValue[currentValue];
+        }, item);
       }];
       if ($scope.header.columns[0].key !== $scope.header.sortBy) {
         listSortBy.push(function(item) {
-          return item[$scope.header.columns[0].key];
+          return $scope.header.columns[0].key.split('.')
+          .reduce(function (previousValue, currentValue) {
+            return previousValue[currentValue];
+          }, item);
         });
       }
       if ($scope.header.sortBy) {
@@ -557,6 +563,13 @@ angular.module('ngTasty.component.table', [
         });
       }
 
+      function cleanSortBy (sortBy) {
+        if (sortBy) {
+          return $filter('cleanFieldName')(sortBy);
+        }
+        return undefined;
+      }
+
       scope.setColumns = function () {
         var width, i, active, sortable, sort, 
             isSorted, isSortedCaret;
@@ -593,15 +606,19 @@ angular.module('ngTasty.component.table', [
               '-' + column.key === scope.header.sortBy) {
             active = true;
           }
+          if (!angular.isDefined(column.key)) {
+            throw new Error('Angular tastyTable directive: need a key value ' +
+                            'each column table header');
+          }
           sort = $filter('cleanFieldName')(column.key);
-          if (scope.header.sortBy === '-' + sort) {
+          if (cleanSortBy(scope.header.sortBy) === '-' + sort) {
             if (tastyTable.config.bootstrapIcon) {
               isSorted = '';
               isSortedCaret = 'caret';
             } else {
               isSorted = scope.iconDown;
             }
-          } else if (scope.header.sortBy === sort) {
+          } else if (cleanSortBy(scope.header.sortBy) === sort) {
             if (tastyTable.config.bootstrapIcon) {
               isSorted = 'dropup';
               isSortedCaret = 'caret';
@@ -632,7 +649,7 @@ angular.module('ngTasty.component.table', [
         }
         var columnName, sortOrder;
         columnName = $filter('cleanFieldName')(column.key);
-        if (scope.header.sortBy === columnName) {
+        if (cleanSortBy(scope.header.sortBy) === columnName) {
           sortOrder = 'dsc';
         } else {
           sortOrder = 'asc';
